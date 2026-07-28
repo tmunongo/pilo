@@ -1,0 +1,39 @@
+{{define "title"}}Pilo · {{.Project.Slug}}{{end}}
+
+{{define "content"}}
+<div class="flex items-center gap-3 mb-1">
+  <h1 class="text-2xl font-semibold text-neutral-50">{{.Project.Slug}}</h1>
+  {{template "status_badge" .Project}}
+</div>
+<p class="text-neutral-500 mb-8">
+  <a href="https://github.com/{{.Project.RepoOwner}}/{{.Project.RepoName}}" target="_blank" class="hover:underline">{{.Project.RepoOwner}}/{{.Project.RepoName}}</a>
+  · branch <code>{{.Project.Branch}}</code>
+  {{if .Project.Subdir}} · subdir <code>{{.Project.Subdir}}</code>{{end}}
+</p>
+
+<div id="project-{{.Project.Slug}}" class="border border-neutral-800 rounded-lg p-5 bg-neutral-900/50 space-y-3 mb-8">
+  <div class="text-sm text-neutral-400">Last deployed commit</div>
+  <code class="text-neutral-100">{{if .Project.LastCommit}}{{.Project.LastCommit}}{{else}}—{{end}}</code>
+  {{if .Project.LastError}}
+    <div class="text-sm text-red-400 border border-red-900 bg-red-950/40 rounded-md px-3 py-2">{{.Project.LastError}}</div>
+  {{end}}
+</div>
+
+<div class="flex gap-3">
+  <a href="/{{.Project.Slug}}/" target="_blank" class="bg-neutral-800 hover:bg-neutral-700 text-neutral-100 px-4 py-2 rounded-md text-sm">Open ↗</a>
+  <button
+    class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md text-sm"
+    hx-post="/projects/{{.Project.Slug}}/redeploy"
+    hx-target="#project-{{.Project.Slug}}"
+    hx-swap="outerHTML">
+    Redeploy
+  </button>
+  <button
+    class="bg-red-900/60 hover:bg-red-900 text-red-200 px-4 py-2 rounded-md text-sm ml-auto"
+    hx-delete="/projects/{{.Project.Slug}}"
+    hx-confirm="Delete {{.Project.Slug}}? This removes the local checkout too."
+    hx-target="body">
+    Delete project
+  </button>
+</div>
+{{end}}

@@ -1,0 +1,34 @@
+{{define "project_row"}}
+<div id="project-{{.Slug}}" class="border border-neutral-800 rounded-lg p-4 flex items-center justify-between bg-neutral-900/50">
+  <div>
+    <div class="flex items-center gap-2">
+      <a href="/projects/{{.Slug}}" class="font-medium text-neutral-50 hover:underline">{{.Slug}}</a>
+      {{template "status_badge" .}}
+    </div>
+    <div class="text-sm text-neutral-500 mt-1">
+      {{.RepoOwner}}/{{.RepoName}} <span class="text-neutral-700">·</span> {{.Branch}}
+      {{if .LastCommit}}<span class="text-neutral-700">·</span> <code class="text-neutral-400">{{.LastCommit}}</code>{{end}}
+    </div>
+  </div>
+  <div class="flex items-center gap-2">
+    <a href="/{{.Slug}}/" target="_blank" class="text-sm text-neutral-400 hover:text-neutral-100 border border-neutral-800 rounded-md px-3 py-1.5">Open ↗</a>
+    <button
+      class="text-sm text-neutral-100 bg-neutral-800 hover:bg-neutral-700 rounded-md px-3 py-1.5"
+      hx-post="/projects/{{.Slug}}/redeploy"
+      hx-target="#project-{{.Slug}}"
+      hx-swap="outerHTML">
+      Redeploy
+    </button>
+  </div>
+</div>
+{{end}}
+
+{{define "status_badge"}}
+  {{if eq .Status "live"}}
+    <span class="text-xs bg-emerald-900/60 text-emerald-400 px-2 py-0.5 rounded-full">live</span>
+  {{else if eq .Status "cloning"}}
+    <span class="text-xs bg-amber-900/60 text-amber-400 px-2 py-0.5 rounded-full">cloning…</span>
+  {{else}}
+    <span class="text-xs bg-red-900/60 text-red-400 px-2 py-0.5 rounded-full" title="{{.LastError}}">error</span>
+  {{end}}
+{{end}}

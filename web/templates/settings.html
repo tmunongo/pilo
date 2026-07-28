@@ -1,0 +1,30 @@
+{{define "title"}}Pilo · Settings{{end}}
+
+{{define "content"}}
+<h1 class="text-2xl font-semibold text-neutral-50 mb-6">Settings</h1>
+
+{{if .Saved}}
+  <div class="border border-emerald-900 bg-emerald-950/40 text-emerald-300 rounded-md px-4 py-3 mb-6 text-sm">Saved.</div>
+{{end}}
+
+<form method="post" action="/settings" class="space-y-5 max-w-lg">
+  <div>
+    <label class="block text-sm text-neutral-400 mb-1">GitHub Personal Access Token</label>
+    <input type="password" name="github_token" placeholder="{{if .HasToken}}•••••••••••••••• (set — leave blank to keep){{else}}ghp_...{{end}}"
+      class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-emerald-600">
+    <p class="text-xs text-neutral-600 mt-1">Fine-grained token, read-only, scoped to the repos you want Pilo to deploy.</p>
+  </div>
+
+  <div>
+    <label class="block text-sm text-neutral-400 mb-1">Webhook Secret <span class="text-neutral-600">(optional, for auto-deploy)</span></label>
+    <input type="password" name="webhook_secret" placeholder="{{if .HasSecret}}•••••••••••••••• (set — leave blank to keep){{else}}used to verify GitHub webhook signatures{{end}}"
+      class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-emerald-600">
+    <p class="text-xs text-neutral-600 mt-1">
+      Point a repo webhook at <code>{{.WebhookURL}}</code> with this secret to auto-redeploy on push.
+      Only useful once Pilo is reachable from GitHub (e.g. on your VPS).
+    </p>
+  </div>
+
+  <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md">Save</button>
+</form>
+{{end}}
