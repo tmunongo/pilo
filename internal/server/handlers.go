@@ -1,8 +1,13 @@
 package server
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -46,6 +51,7 @@ func (h *Handlers) Mux() http.Handler {
 	mux.HandleFunc("DELETE /projects/{slug}", h.Delete)
 	mux.HandleFunc("GET /settings", h.SettingsForm)
 	mux.HandleFunc("POST /settings", h.SettingsSave)
+	mux.HandleFunc("POST /webhooks/github", h.WebhookGitHub)
 	mux.HandleFunc("GET /health", h.Health)
 	return mux
 }
@@ -244,4 +250,85 @@ func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
+}
+
+type githubWebhookPayload struct {
+	Ref        string `json:"ref"`
+	Repository struct {
+		Name  string `json:"name"`
+		Owner struct {
+			Login string `json:"login"`
+			Name  string `json:"name"`
+		} `json:"owner"`
+		FullName string `json:"full_name"`
+	} `json:"repository"`
+}
+
+func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
+	secret := h.Store.WebhookSecret
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	if secret != "" {
+		sig := r.Header.Get("X-Hub-Signature-256")
+		if !verifySignature(secret, body, sig) {
+			http.Error(w, "invalid webhook signature", http.StatusUnauthorized)
+			return
+		}
+	}
+
+	var payload githubWebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		http.Error(w, "invalid json payload", http.StatusBadRequest)
+		return
+	}
+
+	branch := strings.TrimPrefix(payload.Ref, "refs/heads/")
+	owner := payload.Repository.Owner.Login
+	if owner == "" {
+		owner = payload.Repository.Owner.Name
+	}
+	repo := payload.Repository.Name
+
+	if owner == "" || repo == "" || branch == "" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ignored: missing repository or branch details"))
+		return
+	}
+
+	redeployedCount := 0
+	for _, p := range h.Store.All() {
+		if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) && p.Branch == branch {
+			commit, err := h.Deployer.Pull(p.Slug, p.Branch, h.Store.GitHubToken)
+			if err != nil {
+				p.Status = store.StatusError
+				p.LastError = err.Error()
+				log.Printf("webhook redeploy %s error: %v", p.Slug, err)
+			} else {
+				p.Status = store.StatusLive
+				p.LastCommit = commit
+				p.LastError = ""
+				log.Printf("webhook redeploy %s success: commit %s", p.Slug, commit)
+			}
+			_ = h.Store.Put(p)
+			redeployedCount++
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "redeployed %d project(s)", redeployedCount)
+}
+
+func verifySignature(secret string, payload []byte, signature string) bool {
+	if !strings.HasPrefix(signature, "sha256=") {
+		return false
+	}
+	sigHex := strings.TrimPrefix(signature, "sha256=")
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(payload)
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(sigHex), []byte(expectedSig))
 }

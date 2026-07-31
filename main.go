@@ -1,8 +1,7 @@
 // Pilo is a tiny, self-hosted PaaS for deploying static (HTML/CSS/JS)
 // tools straight from GitHub repos onto a local path, e.g.
-// http://pilo.local:8080/my-tool/. Single binary, no external
-// dependencies, JSON-file storage — built to run comfortably on a
-// Raspberry Pi.
+// http://pilo.local:8080/my-tool/. Single binary, SQLite storage,
+// pure-Go — built to run comfortably on a Raspberry Pi.
 package main
 
 import (
@@ -28,10 +27,11 @@ func main() {
 	port := getenv("PILO_PORT", "8080")
 	baseURL := getenv("PILO_BASE_URL", "http://localhost:"+port)
 
-	st, err := store.New(filepath.Join(dataDir, "pilo.json"))
+	st, err := store.New(filepath.Join(dataDir, "paas.db"))
 	if err != nil {
 		log.Fatalf("loading store: %v", err)
 	}
+	defer st.Close()
 
 	dep := deploy.New(filepath.Join(dataDir, "repos"))
 
