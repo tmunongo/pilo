@@ -1,0 +1,51 @@
+# Air live-reload configuration for Pilo
+# Docs: https://github.com/air-verse/air
+
+root = "."
+tmp_dir = ".air"
+
+[build]
+  # The command Air runs when a change is detected.
+  cmd = "go build -o .air/pilo ."
+  # The binary Air runs after a successful build.
+  bin = ".air/pilo"
+  # Pass env vars to the running binary.
+  full_bin = "PILO_PORT=8080 .air/pilo"
+  # Paths to watch for changes (relative to root).
+  include_dir = [".", "web", "internal"]
+  # File extensions to watch.
+  include_ext = ["go", "html", "css", "js"]
+  # Paths to exclude from watching.
+  exclude_dir = [".air", "data", ".git", ".github"]
+  # Exclude files matching these patterns.
+  exclude_file = []
+  # Exclude unchanged files — avoids spurious rebuilds.
+  exclude_unchanged = true
+  # Time to wait after last change before rebuilding (ms).
+  delay = 300
+  # Send interrupt signal before killing the process.
+  send_interrupt = true
+  # Graceful stop timeout (ms).
+  kill_delay = 500
+  # Rerun even if the build fails.
+  rerun = false
+  # Print all log lines from the build command.
+  log = "build-errors.log"
+
+[log]
+  # Log level: "debug", "info", "warn", "error".
+  level = "info"
+  # Include timestamps in log output.
+  time = false
+  # Coloured output.
+  main_only = false
+
+[color]
+  main    = "magenta"
+  watcher = "cyan"
+  build   = "yellow"
+  runner  = "green"
+
+[misc]
+  # Delete the tmp dir on exit.
+  clean_on_exit = true

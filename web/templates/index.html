@@ -1,17 +1,111 @@
-{{define "title"}}Pilo · Projects{{end}}
+{{define "title"}}Pilo · Dashboard{{end}}
 
 {{define "content"}}
-<h1 class="text-2xl font-semibold text-neutral-50 mb-6">Projects</h1>
+<div x-data="{ search: '' }" class="space-y-8">
+  <!-- Stats Header Overview -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total Projects</p>
+        <p class="text-3xl font-bold text-zinc-100 mt-1 font-mono">{{len .Projects}}</p>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+      </div>
+    </div>
 
-{{if not .Projects}}
-  <div class="border border-dashed border-neutral-800 rounded-lg p-10 text-center text-neutral-500">
-    No projects yet. <a href="/projects/new" class="text-emerald-500 hover:underline">Deploy your first tool</a>.
+    <div class="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">System Status</p>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <p class="text-lg font-bold text-emerald-400">Online &amp; Serving</p>
+        </div>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+    </div>
+
+    <div class="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Auto-Deployment</p>
+        <p class="text-lg font-bold text-zinc-200 mt-1">GitHub Webhooks</p>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+      </div>
+    </div>
   </div>
-{{else}}
-  <div class="grid gap-3" id="project-list">
+
+  <!-- Filter & Actions Bar -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2">
+    <div>
+      <h1 class="text-2xl font-bold text-white tracking-tight">Projects</h1>
+      <p class="text-xs text-zinc-400 mt-0.5">Manage and redeploy your static tools instantly</p>
+    </div>
+
+    {{if .Projects}}
+    <div class="flex items-center gap-3">
+      <!-- Search Input -->
+      <div class="relative w-full sm:w-64">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <input 
+          type="text" 
+          x-model="search" 
+          placeholder="Filter projects…" 
+          class="w-full bg-zinc-900/90 border border-zinc-800 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl pl-9 pr-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 transition-all outline-none">
+        <button 
+          x-show="search" 
+          @click="search = ''" 
+          class="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-zinc-300">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- Projects Grid / Empty State -->
+  {{if not .Projects}}
+  <div class="bg-zinc-900/40 border border-dashed border-zinc-800/80 rounded-3xl p-12 text-center backdrop-blur">
+    <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center mb-4 shadow-lg shadow-emerald-950">
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+      </svg>
+    </div>
+    <h2 class="text-xl font-bold text-white mb-2">No projects deployed yet</h2>
+    <p class="text-sm text-zinc-400 max-w-md mx-auto mb-6">
+      Connect any public or private GitHub repository to deploy static HTML/CSS/JS applications to Pilo in seconds.
+    </p>
+    <a href="/projects/new" class="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-950/50 hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+      </svg>
+      <span>Deploy Your First Tool</span>
+    </a>
+  </div>
+  {{else}}
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="project-list">
     {{range .Projects}}
       {{template "project_row" .}}
     {{end}}
   </div>
-{{end}}
+  {{end}}
+</div>
 {{end}}

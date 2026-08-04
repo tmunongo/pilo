@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Automatic HTTP to HTTPS redirection
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # ACME Let's Encrypt configuration (Replace admin@example.com with your email)
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=admin@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-certificates:/letsencrypt"
+    networks:
+      - web
+
+  pilo:
+    image: ghcr.io/tmunongo/pilo:latest
+    container_name: pilo
+    restart: unless-stopped
+    environment:
+      - PILO_PORT=8080
+      - PILO_DATA_DIR=/data
+      - PILO_BASE_URL=https://pilo.example.com
+    volumes:
+      - pilo-data:/data
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      # Domain routing rule (Replace pilo.example.com with your domain)
+      - "traefik.http.routers.pilo.rule=Host(`pilo.example.com`)"
+      - "traefik.http.routers.pilo.entrypoints=websecure"
+      - "traefik.http.routers.pilo.tls.certresolver=myresolver"
+      - "traefik.http.services.pilo.loadbalancer.server.port=8080"
+
+volumes:
+  pilo-data:
+    driver: local
+  traefik-certificates:
+    driver: local
+
+networks:
+  web:
+    driver: bridge

@@ -4,3 +4,6 @@ data
 *.pem
 .pem
 
+# Air live-reload
+.air/
+build-errors.log

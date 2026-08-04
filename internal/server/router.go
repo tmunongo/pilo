@@ -9,13 +9,13 @@ import (
 // reservedSlugs can never be used as a project slug, since they'd
 // collide with Pilo's own admin routes.
 var reservedSlugs = map[string]bool{
-	"":          true,
-	"projects":  true,
-	"webhooks":  true,
-	"static":    true,
-	"health":    true,
-	"settings":  true,
-	"pilo":      true,
+	"":         true,
+	"projects": true,
+	"webhooks": true,
+	"static":   true,
+	"health":   true,
+	"settings": true,
+	"pilo":     true,
 }
 
 // IsReservedSlug reports whether slug is reserved for Pilo's own use.

@@ -1,43 +1,144 @@
 {{define "title"}}Pilo · New Project{{end}}
 
 {{define "content"}}
-<h1 class="text-2xl font-semibold text-neutral-50 mb-6">Deploy a new project</h1>
-
-{{if .Error}}
-  <div class="border border-red-900 bg-red-950/50 text-red-300 rounded-md px-4 py-3 mb-6 text-sm">{{.Error}}</div>
-{{end}}
-
-<form method="post" action="/projects" class="space-y-5 max-w-lg">
-  <div>
-    <label class="block text-sm text-neutral-400 mb-1">GitHub repo</label>
-    <input name="repo" required placeholder="owner/repo or full github.com URL"
-      value="{{.Form.repo}}"
-      class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-emerald-600">
-    <p class="text-xs text-neutral-600 mt-1">e.g. <code>tawanda/left-bank-cafe-menu</code></p>
-  </div>
-
-  <div>
-    <label class="block text-sm text-neutral-400 mb-1">Slug (URL path)</label>
-    <input name="slug" placeholder="auto-filled from repo name" value="{{.Form.slug}}"
-      class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-emerald-600">
-    <p class="text-xs text-neutral-600 mt-1">Will be served at <code>/&lt;slug&gt;/</code></p>
-  </div>
-
-  <div class="grid grid-cols-2 gap-4">
-    <div>
-      <label class="block text-sm text-neutral-400 mb-1">Branch</label>
-      <input name="branch" value="{{if .Form.branch}}{{.Form.branch}}{{else}}main{{end}}"
-        class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 focus:outline-none focus:border-emerald-600">
+<div x-data="{
+  repo: '{{.Form.repo}}',
+  slug: '{{.Form.slug}}',
+  slugEdited: {{if .Form.slug}}true{{else}}false{{end}},
+  branch: '{{if .Form.branch}}{{.Form.branch}}{{else}}main{{end}}',
+  loading: false,
+  get previewSlug() {
+    if (this.slugEdited && this.slug) return this.slug;
+    const parts = this.repo.replace(/^.*github\.com[:/]/,'').replace(/\.git\/?$/,'').split('/');
+    const name = parts[parts.length - 1] || '';
+    return name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  }
+}" class="max-w-2xl">
+  <!-- Page Heading -->
+  <div class="mb-8">
+    <div class="flex items-center gap-2 text-zinc-500 text-sm mb-3">
+      <a href="/" class="hover:text-zinc-300 transition-colors">Projects</a>
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+      </svg>
+      <span class="text-zinc-300">New Project</span>
     </div>
-    <div>
-      <label class="block text-sm text-neutral-400 mb-1">Subdirectory <span class="text-neutral-600">(optional)</span></label>
-      <input name="subdir" placeholder="e.g. tools/my-app" value="{{.Form.subdir}}"
-        class="w-full bg-neutral-900 border border-neutral-800 rounded-md px-3 py-2 text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-emerald-600">
-    </div>
+    <h1 class="text-2xl font-bold text-white tracking-tight">Deploy a new project</h1>
+    <p class="text-sm text-zinc-400 mt-1">Clone any GitHub repository and serve it as a static site in one click.</p>
   </div>
 
-  <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md">
-    Clone &amp; Deploy
-  </button>
-</form>
+  {{if .Error}}
+  <div class="flex items-start gap-3 border border-rose-800/60 bg-rose-950/40 text-rose-300 rounded-xl px-4 py-3.5 mb-6 text-sm backdrop-blur">
+    <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <span>{{.Error}}</span>
+  </div>
+  {{end}}
+
+  <form method="post" action="/projects" class="space-y-6" @submit="loading = true">
+    <!-- Form Card -->
+    <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 space-y-5 backdrop-blur shadow-xl shadow-black/20">
+      
+      <!-- GitHub Repo Input -->
+      <div>
+        <label class="block text-sm font-semibold text-zinc-300 mb-1.5">GitHub Repository</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+            </svg>
+          </div>
+          <input 
+            name="repo" 
+            required 
+            placeholder="owner/repo or full github.com URL"
+            x-model="repo"
+            value="{{.Form.repo}}"
+            class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl pl-10 pr-4 py-2.5 text-zinc-100 placeholder-zinc-600 transition-all outline-none font-mono text-sm">
+        </div>
+        <p class="text-xs text-zinc-500 mt-2">
+          e.g. <code class="text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono text-[11px]">tawanda/left-bank-cafe-menu</code>
+          or a full GitHub URL
+        </p>
+      </div>
+
+      <!-- Slug Field with Live Preview -->
+      <div>
+        <label class="block text-sm font-semibold text-zinc-300 mb-1.5">
+          URL Slug
+          <span class="ml-2 text-xs font-normal text-zinc-500">(auto-generated from repo name)</span>
+        </label>
+        <input 
+          name="slug" 
+          placeholder="auto-filled from repo name" 
+          value="{{.Form.slug}}"
+          x-model="slug"
+          @input="slugEdited = true"
+          class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-4 py-2.5 text-zinc-100 placeholder-zinc-600 transition-all outline-none font-mono text-sm">
+        
+        <!-- Live Preview Badge -->
+        <div class="flex items-center gap-2 mt-2" x-show="repo || slug">
+          <span class="text-xs text-zinc-500">Preview URL:</span>
+          <span class="text-xs font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-900/60 px-2 py-0.5 rounded">
+            /<span x-text="previewSlug || '…'"></span>/
+          </span>
+        </div>
+        <p class="text-xs text-zinc-500 mt-1" x-show="!repo && !slug">
+          Will be served at <code class="text-zinc-400 font-mono text-[11px]">/<span>slug</span>/</code>
+        </p>
+      </div>
+
+      <!-- Branch & Subdir -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-semibold text-zinc-300 mb-1.5">Branch</label>
+          <input 
+            name="branch" 
+            x-model="branch"
+            class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-4 py-2.5 text-zinc-100 transition-all outline-none font-mono text-sm">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-zinc-300 mb-1.5">
+            Subdirectory
+            <span class="text-[10px] font-normal text-zinc-600 ml-1">optional</span>
+          </label>
+          <input 
+            name="subdir" 
+            placeholder="e.g. tools/my-app" 
+            value="{{.Form.subdir}}"
+            class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-4 py-2.5 text-zinc-100 placeholder-zinc-600 transition-all outline-none font-mono text-sm">
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="flex items-start gap-3 text-xs text-zinc-400 bg-zinc-900/40 border border-zinc-800/60 rounded-xl px-4 py-3.5">
+      <svg class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <div>
+        <p class="font-semibold text-zinc-300 mb-0.5">Private repositories</p>
+        Pilo uses your GitHub Personal Access Token (set in <a href="/settings" class="text-emerald-400 hover:underline">Settings</a>) to clone private repos. 
+        Fine-grained read-only token recommended.
+      </div>
+    </div>
+
+    <!-- Submit Button -->
+    <button 
+      type="submit" 
+      :disabled="loading"
+      class="w-full inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-emerald-800 disabled:to-teal-800 text-white font-bold px-5 py-3 rounded-xl shadow-lg shadow-emerald-950/50 hover:shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all text-sm">
+      
+      <svg x-show="loading" class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+      </svg>
+      <span x-text="loading ? 'Cloning Repository…' : 'Clone & Deploy'"></span>
+    </button>
+  </form>
+</div>
 {{end}}

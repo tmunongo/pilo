@@ -1,69 +1,296 @@
 # 🛰️ Pilo
 
-A tiny, self-hosted PaaS for deploying static (HTML/CSS/JS) tools straight from GitHub onto a local URL path. One Go binary, SQLite storage, no framework needed.
+<p align="center">
+  <strong>A lightweight, self-hosted PaaS for deploying static web applications straight from GitHub.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/tmunongo/pilo/actions/workflows/ci.yml">
+    <img src="https://github.com/tmunongo/pilo/actions/workflows/ci.yml/badge.svg" alt="CI Status" />
+  </a>
+  <a href="https://github.com/tmunongo/pilo/actions/workflows/release.yml">
+    <img src="https://github.com/tmunongo/pilo/actions/workflows/release.yml/badge.svg" alt="Release Status" />
+  </a>
+  <a href="https://github.com/tmunongo/pilo/releases">
+    <img src="https://img.shields.io/github/v/release/tmunongo/pilo?color=blue&logo=github" alt="GitHub Release" />
+  </a>
+  <a href="https://ghcr.io/tmunongo/pilo">
+    <img src="https://img.shields.io/badge/docker-ghcr.io%2Ftmunongo%2Fpilo-blue?logo=docker" alt="Docker Container Image" />
+  </a>
+  <a href="https://golang.org">
+    <img src="https://img.shields.io/github/go-mod/go-version/tmunongo/pilo" alt="Go Version" />
+  </a>
+</p>
+
+---
+
+Pilo turns any machine (VPS, home server, or Raspberry Pi) into a micro-PaaS. It listens for incoming HTTP requests, dynamic routes requests to cloned GitHub repositories on disk, and supports automated deployment via GitHub webhooks.
 
 ```
-GitHub repo → cloned onto disk → served at a URL path
+                  ┌────────────────────────────────────────┐
+                  │              GitHub Repo               │
+                  └──────────────────┬─────────────────────┘
+                                     │
+                             (Push / Webhook)
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              Pilo Server                                │
+├─────────────────────────┬───────────────────────┬───────────────────────┤
+│    Admin UI (/)         │   /app-one/*          │   /app-two/*          │
+├─────────────────────────┼───────────────────────┼───────────────────────┤
+│  Manage Apps & Webhooks │  /data/repos/app-one  │  /data/repos/app-two  │
+└─────────────────────────┴───────────────────────┴───────────────────────┘
 ```
 
-## Quick start
+---
+
+## ✨ Features
+
+- ⚡ **Zero-Dependencies Runtime**: Single Go binary powered by embedded SQLite storage (`modernc.org/sqlite`).
+- 🔄 **Dynamic Routing**: Instant route registration without restarting the server.
+- 🔐 **GitHub Webhook Sync**: Verified HMAC `X-Hub-Signature-256` payload processing for auto-pulling main branches.
+- 📦 **Multi-Arch Docker Images**: Native support for `amd64` and `arm64` (Raspberry Pi).
+- 🔒 **Production Ready**: Fully integrable with reverse proxies like Traefik, Nginx, or Caddy.
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### Using Makefile
 
 ```bash
-# 1. Fetch the SQLite driver (requires network)
+# Clone the repository
+git clone https://github.com/tmunongo/pilo.git
+cd pilo
+
+# Run locally (starts on http://localhost:8080)
+make run
+```
+
+### Using Go CLI
+
+```bash
+# Fetch dependencies
 go mod tidy
 
-# 2. Run locally
+# Run locally
 PILO_PORT=8080 go run main.go
-
-# 3. Open http://localhost:8080 and add your GitHub PAT in Settings
 ```
 
-## Cross-compile for Raspberry Pi (ARM64)
+Open `http://localhost:8080` in your browser and configure your GitHub Personal Access Token (PAT) under Settings.
+
+---
+
+## 🏷️ Versioning & Automated Releases
+
+Pilo uses **Semantic Versioning (SemVer)** automated via Makefile recipes and GitHub Actions.
+
+### Inspect Current & Next Versions
 
 ```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o pilo-arm64 main.go
-scp pilo-arm64 pi@pilo.local:/home/pi/pilo
+make version
 ```
 
-## Docker
+### Trigger a Release
+
+Bump the version and automatically push a Git tag (`vX.Y.Z`). This triggers the GitHub Actions release workflow to build multi-platform Docker images (`linux/amd64`, `linux/arm64`) and publish them to **GitHub Container Registry (`ghcr.io/tmunongo/pilo`)**.
 
 ```bash
-docker build -t pilo .
-docker run -d -p 8080:8080 -v pilo-data:/data --name pilo pilo
+# Create and push a patch release (v0.0.1 -> v0.0.2)
+make patch
+
+# Create and push a minor release (v0.0.1 -> v0.1.0)
+make minor
+
+# Create and push a major release (v0.0.1 -> v1.0.0)
+make major
 ```
 
-## How it works
+---
 
-| URL path         | Served from                        |
-|------------------|------------------------------------|
-| `/my-app/*`      | `/data/repos/my-app/` (or subdir) |
-| `/another-tool/*`| `/data/repos/another-tool/`       |
-| `/`              | Admin UI                           |
+## 🐳 Deployment Options
 
-Routes are registered dynamically as you add projects — no restart needed.
+### Option 1: Standalone Docker Run
 
-## Data layout
+Run Pilo as a background Docker container with persistent volume storage for database and cloned repositories:
+
+```bash
+docker run -d \
+  --name pilo \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v pilo-data:/data \
+  -e PILO_PORT=8080 \
+  -e PILO_DATA_DIR=/data \
+  -e PILO_BASE_URL=http://localhost:8080 \
+  ghcr.io/tmunongo/pilo:latest
+```
+
+---
+
+### Option 2: Docker Compose
+
+Create a [`docker-compose.yml`](file:///Users/tawanda/Projects/pilo/docker-compose.yml) file:
+
+```yaml
+version: '3.8'
+
+services:
+  pilo:
+    image: ghcr.io/tmunongo/pilo:latest
+    container_name: pilo
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PILO_PORT=8080
+      - PILO_DATA_DIR=/data
+      - PILO_BASE_URL=http://localhost:8080
+    volumes:
+      - pilo-data:/data
+
+volumes:
+  pilo-data:
+    driver: local
+```
+
+Start the container:
+
+```bash
+docker compose up -d
+```
+
+---
+
+### Option 3: Production Deployment with Traefik (HTTPS / Automated SSL)
+
+Traefik is a modern HTTP reverse proxy and load balancer that automatically provisions SSL/TLS certificates via Let's Encrypt.
+
+#### Architecture
+
+```
+[ Client Request ] ──(HTTPS:443)──► [ Traefik Proxy ] ──(HTTP:8080)──► [ Pilo Container ]
+                                          │
+                            (Automatic Let's Encrypt SSL)
+```
+
+#### Step 1: Prepare `docker-compose.traefik.yml`
+
+Use the included [`docker-compose.traefik.yml`](file:///Users/tawanda/Projects/pilo/docker-compose.traefik.yml) configuration:
+
+```yaml
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=admin@yourdomain.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik-certificates:/letsencrypt"
+    networks:
+      - web
+
+  pilo:
+    image: ghcr.io/tmunongo/pilo:latest
+    container_name: pilo
+    restart: unless-stopped
+    environment:
+      - PILO_PORT=8080
+      - PILO_DATA_DIR=/data
+      - PILO_BASE_URL=https://pilo.yourdomain.com
+    volumes:
+      - pilo-data:/data
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pilo.rule=Host(`pilo.yourdomain.com`)"
+      - "traefik.http.routers.pilo.entrypoints=websecure"
+      - "traefik.http.routers.pilo.tls.certresolver=myresolver"
+      - "traefik.http.services.pilo.loadbalancer.server.port=8080"
+
+volumes:
+  pilo-data:
+    driver: local
+  traefik-certificates:
+    driver: local
+
+networks:
+  web:
+    driver: bridge
+```
+
+#### Step 2: Configure Domain DNS
+Point your domain's A/AAAA DNS records (e.g., `pilo.yourdomain.com`) to your server's public IP address.
+
+#### Step 3: Launch Stack
+
+```bash
+docker compose -f docker-compose.traefik.yml up -d
+```
+
+Traefik will handle SSL certificate generation automatically, redirect HTTP to HTTPS, and route incoming requests directly to Pilo.
+
+---
+
+## ⚙️ Environment Variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `PILO_DATA_DIR` | `./data` | File path where SQLite database (`paas.db`) and cloned Git repositories are stored |
+| `PILO_PORT` | `8080` | Internal HTTP listening port for the Go server |
+| `PILO_BASE_URL` | `http://localhost:<PORT>` | Public base URL used for rendering GitHub webhook endpoints |
+
+---
+
+## 🛠️ GitHub Webhooks Integration
+
+1. In Pilo's settings page (`/`), configure a **Webhook Secret**.
+2. In your target GitHub repository, go to **Settings > Webhooks > Add webhook**.
+3. Set **Payload URL** to `https://pilo.yourdomain.com/webhooks/github` (or `http://your-server-ip:8080/webhooks/github`).
+4. Set **Content type** to `application/json`.
+5. Enter the same **Secret** you defined in Pilo.
+6. On every `push` event, Pilo verifies the `X-Hub-Signature-256` signature and automatically runs `git pull` on the targeted project branch.
+
+---
+
+## 📂 Data Layout
 
 ```
 /data/
-  paas.db          ← SQLite (projects + settings)
-  repos/
-    my-app/        ← git clone of owner/repo@branch
-    another-tool/
+├── paas.db          ← SQLite database (Projects, Settings)
+└── repos/           ← Managed GitHub repositories
+    ├── my-app/      ← git clone of owner/repo@branch
+    └── docs-site/   ← git clone of owner/repo@branch
 ```
 
-## Environment variables
+---
 
-| Variable         | Default                    | Description                     |
-|------------------|----------------------------|---------------------------------|
-| `PILO_DATA_DIR`  | `./data`                   | Where to store the DB and repos |
-| `PILO_PORT`      | `8080`                     | HTTP listen port                |
-| `PILO_BASE_URL`  | `http://localhost:<PORT>`  | Used to render the webhook URL  |
+## 🛠️ Developer Commands
 
-## GitHub webhooks (VPS mode)
-
-Point a repo webhook at `http://your-server:8080/webhooks/github` with content type `application/json`. Set a **Webhook Secret** in Pilo's Settings page and paste the same value into GitHub's webhook config.
-
-On push to a tracked branch, Pilo verifies the `X-Hub-Signature-256` HMAC and runs `git pull` automatically.
-
-On the Pi (no public IP) you skip webhooks and use the manual **Redeploy** button instead.
+| Command | Description |
+| :--- | :--- |
+| `make help` | Show all available Makefile commands |
+| `make test` | Run Go unit test suite (`go test -v ./...`) |
+| `make build` | Build standalone executable (`pilo`) |
+| `make docker-build` | Build local Docker container |
+| `make patch` | Tag and publish next patch release (`vX.Y.Z+1`) |
+| `make minor` | Tag and publish next minor release (`vX.Y+1.0`) |
+| `make major` | Tag and publish next major release (`vX+1.0.0`) |
