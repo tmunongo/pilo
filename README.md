@@ -48,6 +48,8 @@ Pilo turns any machine (VPS, home server, or Raspberry Pi) into a micro-PaaS. It
 ## ✨ Features
 
 - ⚡ **Zero-Dependencies Runtime**: Single Go binary powered by embedded SQLite storage (`modernc.org/sqlite`).
+- 👤 **Multi-User Authentication**: Secure sign up, sign in, session management, and password resets via bcrypt.
+- 🛡️ **Account-Scoped Isolation**: Projects and GitHub credentials are fully isolated per user account.
 - 🔄 **Dynamic Routing**: Instant route registration without restarting the server.
 - 🔐 **GitHub Webhook Sync**: Verified HMAC `X-Hub-Signature-256` payload processing for auto-pulling main branches.
 - 📦 **Multi-Arch Docker Images**: Native support for `amd64` and `arm64` (Raspberry Pi).
@@ -256,7 +258,12 @@ Traefik will handle SSL certificate generation automatically, redirect HTTP to H
 | :--- | :--- | :--- |
 | `PILO_DATA_DIR` | `./data` | File path where SQLite database (`paas.db`) and cloned Git repositories are stored |
 | `PILO_PORT` | `8080` | Internal HTTP listening port for the Go server |
-| `PILO_BASE_URL` | `http://localhost:<PORT>` | Public base URL used for rendering GitHub webhook endpoints |
+| `PILO_BASE_URL` | `http://localhost:<PORT>` | Public base URL used for rendering GitHub webhook endpoints & reset links |
+| `SMTP_HOST` | _(empty)_ | Optional SMTP host for sending password reset emails (logs link to stdout when empty) |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | _(empty)_ | SMTP authentication username |
+| `SMTP_PASS` | _(empty)_ | SMTP authentication password |
+| `SMTP_FROM` | `noreply@pilo.local` | From address on outbound reset emails |
 
 ---
 
@@ -288,6 +295,7 @@ Traefik will handle SSL certificate generation automatically, redirect HTTP to H
 | Command | Description |
 | :--- | :--- |
 | `make help` | Show all available Makefile commands |
+| `make sqlc` | Generate type-safe Go database code from SQL schema/queries using `sqlc` |
 | `make test` | Run Go unit test suite (`go test -v ./...`) |
 | `make build` | Build standalone executable (`pilo`) |
 | `make docker-build` | Build local Docker container |

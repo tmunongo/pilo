@@ -634,9 +634,17 @@
         pilo
       </a>
       <nav aria-label="Main navigation">
+        {{if .User}}
         <a href="/" class="nav-link{{if eq .ActiveNav "projects"}} nav-link--active{{end}}">projects</a>
         <a href="/settings" class="nav-link{{if eq .ActiveNav "settings"}} nav-link--active{{end}}">settings</a>
         <a href="/projects/new" class="btn-primary">new project</a>
+        <form method="post" action="/logout" style="display:inline; margin-left: 8px;">
+          <button type="submit" class="btn-text btn-text--muted" style="cursor:pointer; font-size:13.5px;" title="{{.User.Email}}">sign out</button>
+        </form>
+        {{else}}
+        <a href="/login" class="nav-link{{if eq .ActiveNav "login"}} nav-link--active{{end}}">sign in</a>
+        <a href="/signup" class="btn-primary">sign up</a>
+        {{end}}
       </nav>
     </div>
   </header>

@@ -1,0 +1,66 @@
+{{define "title"}}pilo · sign in{{end}}
+
+{{define "main"}}
+<main class="detail-screen">
+  <div class="shell" style="max-width: 480px; margin: 40px auto;">
+
+    <h1 class="page-title">Sign in</h1>
+    <p class="page-lead" style="margin-top:16px;">Sign in to your Pilo account to manage your projects.</p>
+
+    {{if .Notice}}
+    <div class="notice" style="margin-top:24px;">{{.Notice}}</div>
+    {{end}}
+
+    {{if .Error}}
+    <div class="notice notice--error" style="margin-top:24px;">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/login">
+      <div class="kv-section section-gap">
+        <div class="form-group" style="margin-top:24px;">
+          <label for="email">email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            class="form-input"
+            value="{{.Form.email}}"
+            placeholder="you@example.com"
+            autocomplete="email"
+            spellcheck="false"
+            autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="password">password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            class="form-input"
+            autocomplete="current-password">
+        </div>
+      </div>
+
+      <div style="margin-top:32px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+        <button type="submit" class="btn-primary">sign in</button>
+        <a href="/forgot-password" class="btn-text btn-text--muted" style="font-size:14px;">forgot password?</a>
+      </div>
+
+      <p class="section-prose" style="margin-top:32px; font-size:15px; border-top:1px solid var(--hairline); padding-top:20px;">
+        Don't have an account? <a href="/signup" class="btn-text" style="font-size:15px; font-family:'Hanken Grotesk',sans-serif;">Create an account</a>.
+      </p>
+    </form>
+
+  </div>
+</main>
+{{end}}
+
+{{define "footer"}}
+<p>
+  pilo{{if .Version}} · {{.Version}}{{end}}{{if .Port}} · :{{.Port}}{{end}}
+</p>
+{{end}}
+

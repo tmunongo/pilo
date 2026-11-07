@@ -1,0 +1,74 @@
+{{define "title"}}pilo · create account{{end}}
+
+{{define "main"}}
+<main class="detail-screen">
+  <div class="shell" style="max-width: 480px; margin: 40px auto;">
+
+    <h1 class="page-title">Sign up</h1>
+    <p class="page-lead" style="margin-top:16px;">Create a new account to deploy and manage static tools.</p>
+
+    {{if .Error}}
+    <div class="notice notice--error" style="margin-top:24px;">{{.Error}}</div>
+    {{end}}
+
+    <form method="post" action="/signup">
+      <div class="kv-section section-gap">
+        <div class="form-group" style="margin-top:24px;">
+          <label for="email">email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            class="form-input"
+            value="{{.Form.email}}"
+            placeholder="you@example.com"
+            autocomplete="email"
+            spellcheck="false"
+            autofocus>
+        </div>
+
+        <div class="form-group">
+          <label for="password">password <span style="color:var(--muted);">(minimum 8 characters)</span></label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            minlength="8"
+            class="form-input"
+            autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+          <label for="password_confirm">confirm password</label>
+          <input
+            id="password_confirm"
+            name="password_confirm"
+            type="password"
+            required
+            minlength="8"
+            class="form-input"
+            autocomplete="new-password">
+        </div>
+      </div>
+
+      <div style="margin-top:32px;">
+        <button type="submit" class="btn-primary">create account</button>
+      </div>
+
+      <p class="section-prose" style="margin-top:32px; font-size:15px; border-top:1px solid var(--hairline); padding-top:20px;">
+        Already have an account? <a href="/login" class="btn-text" style="font-size:15px; font-family:'Hanken Grotesk',sans-serif;">Sign in</a>.
+      </p>
+    </form>
+
+  </div>
+</main>
+{{end}}
+
+{{define "footer"}}
+<p>
+  pilo{{if .Version}} · {{.Version}}{{end}}{{if .Port}} · :{{.Port}}{{end}}
+</p>
+{{end}}
+

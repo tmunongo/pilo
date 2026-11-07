@@ -1,4 +1,4 @@
-.PHONY: help build run dev fmt vet test clean docker-build version patch minor major release-patch release-minor release-major
+.PHONY: help build run dev fmt vet test clean docker-build version patch minor major release-patch release-minor release-major sqlc generate
 
 BINARY_NAME := pilo
 IMAGE_NAME := ghcr.io/tmunongo/pilo
@@ -34,6 +34,11 @@ run: build ## Build and run locally
 dev: ## Run with Air live-reload (auto-rebuilds on file changes)
 	@command -v air >/dev/null 2>&1 || { echo "Air not found. Installing..."; go install github.com/air-verse/air@latest; }
 	air -c .air.toml
+
+sqlc: ## Run sqlc generate
+	@command -v sqlc >/dev/null 2>&1 && sqlc generate || ~/go/bin/sqlc generate
+
+generate: sqlc ## Alias for sqlc generate
 
 test: ## Run unit tests
 	go test -v ./...

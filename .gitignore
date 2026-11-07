@@ -11,3 +11,6 @@ pilo
 
 # Environment and secrets
 .env*
+
+# Environment and secrets
+.env*

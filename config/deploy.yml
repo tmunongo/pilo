@@ -45,6 +45,14 @@ env:
     PILO_PORT: 8080
     PILO_DATA_DIR: /data
     PILO_BASE_URL: https://pilo.webbe.dev
+  secret:
+    - EMAIL_HOST
+    - EMAIL_PORT
+    - EMAIL_HOST_USER
+    - EMAIL_HOST_PASSWORD
+    - EMAIL_USE_TLS
+    - EMAIL_USE_SSL
+    - PORT
 
 aliases:
   shell: app exec --interactive --reuse "sh"
