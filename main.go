@@ -37,6 +37,8 @@ func main() {
 
 	router := server.NewRouter(nil) // admin handler wired in below
 	handlers := server.NewHandlers(st, dep, router, baseURL)
+	handlers.Port = port
+	handlers.Version = getenv("PILO_VERSION", "v0.1.0")
 
 	adminMux := handlers.Mux()
 	router.SetAdmin(adminMux)

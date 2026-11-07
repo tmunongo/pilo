@@ -1,144 +1,119 @@
-{{define "title"}}Pilo · {{.Project.Slug}}{{end}}
+{{define "title"}}pilo · {{.Project.Slug}}{{end}}
 
-{{define "content"}}
-<div class="max-w-2xl" x-data="{}">
-  <!-- Breadcrumb -->
-  <div class="flex items-center gap-2 text-zinc-500 text-sm mb-5">
-    <a href="/" class="hover:text-zinc-300 transition-colors">Projects</a>
-    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-    </svg>
-    <span class="text-zinc-300 font-medium font-mono">{{.Project.Slug}}</span>
-  </div>
+{{define "main"}}
+<main class="detail-screen">
+  <div class="shell">
 
-  <!-- Page Header -->
-  <div class="flex items-start justify-between gap-4 mb-6">
-    <div>
-      <div class="flex items-center gap-3 mb-2">
-        <h1 class="text-2xl font-bold text-white tracking-tight font-mono">{{.Project.Slug}}</h1>
-        {{template "status_badge" .Project}}
-      </div>
-      <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-400">
-        <a href="https://github.com/{{.Project.RepoOwner}}/{{.Project.RepoName}}" target="_blank" class="flex items-center gap-1.5 hover:text-zinc-200 transition-colors">
-          <svg class="w-3.5 h-3.5 text-zinc-500" fill="currentColor" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
-          </svg>
-          <span class="font-mono">{{.Project.RepoOwner}}/{{.Project.RepoName}}</span>
-        </a>
-        <span class="text-zinc-700">·</span>
-        <span class="inline-flex items-center gap-1 bg-zinc-800/80 border border-zinc-700/50 px-2 py-0.5 rounded text-xs font-mono text-zinc-300">
-          <svg class="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-          </svg>
-          {{.Project.Branch}}
-        </span>
-        {{if .Project.Subdir}}
-        <span class="text-zinc-700">·</span>
-        <span class="inline-flex items-center gap-1 bg-zinc-800/80 border border-zinc-700/50 px-2 py-0.5 rounded text-xs font-mono text-zinc-400">
-          <svg class="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-          </svg>
-          {{.Project.Subdir}}
-        </span>
-        {{end}}
-      </div>
-    </div>
-  </div>
+    <a href="/" class="back-link">← projects</a>
 
-  <!-- Deploy Info Card -->
-  <div id="project-{{.Project.Slug}}" class="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 mb-5 space-y-4 backdrop-blur shadow-lg shadow-black/20">
-    <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Deployment Info</p>
+    <!-- Project title + status line -->
+    <h1 class="project-title">{{.Project.Slug}}</h1>
 
-    <!-- Live URL -->
-    <div class="flex items-center justify-between gap-3 bg-zinc-950/60 border border-zinc-800/60 rounded-xl px-4 py-3">
-      <div class="flex items-center gap-2 min-w-0">
-        <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-        </svg>
-        <span class="text-sm text-zinc-200 font-mono truncate">/{{.Project.Slug}}/</span>
-      </div>
-      <button @click="copyToClipboard(window.location.origin + '/{{.Project.Slug}}/')" class="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-        </svg>
-        Copy
-      </button>
-    </div>
-
-    <!-- Last Commit -->
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 rounded-lg bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center shrink-0">
-        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-        </svg>
-      </div>
-      <div class="min-w-0 flex-1">
-        <p class="text-xs text-zinc-500 mb-0.5">Last deployed commit</p>
-        {{if .Project.LastCommit}}
-        <div class="flex items-center gap-2">
-          <code class="text-sm font-mono text-emerald-400 font-semibold">{{.Project.LastCommit}}</code>
-          <button @click="copyToClipboard('{{.Project.LastCommit}}')" class="text-zinc-600 hover:text-zinc-300 transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-          </button>
-        </div>
+    <div class="status-line" id="project-status-{{.Project.Slug}}">
+      {{if eq .Project.Status "cloning"}}
+        <span class="lamp-mark lamp-mark--building" aria-hidden="true"></span>
+        <span>building{{if .Project.LastCommit}} from {{slice .Project.LastCommit 0 7}}{{end}}…</span>
+      {{else if eq .Project.Status "live"}}
+        {{if isFresh .Project.UpdatedAt}}
+          <span class="lamp-mark lamp-mark--solid" aria-hidden="true"></span>
         {{else}}
-        <span class="text-sm text-zinc-600 italic">Not yet deployed</span>
+          <span class="lamp-mark lamp-mark--idle" aria-hidden="true"></span>
         {{end}}
-      </div>
+        <span>Deployed {{reltime .Project.UpdatedAt}}{{if .Project.LastCommit}} from {{slice .Project.LastCommit 0 7}}{{end}}. Serving.</span>
+      {{else}}
+        <span class="status-failed">×</span>
+        <span>failed{{if not .Project.UpdatedAt.IsZero}} {{reltime .Project.UpdatedAt}}{{end}}{{if .Project.LastCommit}} from {{slice .Project.LastCommit 0 7}}{{end}}.</span>
+      {{end}}
     </div>
 
-    <!-- Error Box -->
-    {{if .Project.LastError}}
-    <div class="flex items-start gap-3 bg-rose-950/40 border border-rose-800/60 rounded-xl px-4 py-3">
-      <svg class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-      </svg>
-      <div>
-        <p class="text-xs font-semibold text-rose-300 mb-1">Deployment Error</p>
-        <p class="text-xs text-rose-400 font-mono break-all">{{.Project.LastError}}</p>
+    <!-- Action row -->
+    <div class="action-row" style="margin-top:24px;">
+      <button
+        class="btn-primary"
+        hx-post="/projects/{{.Project.Slug}}/redeploy">redeploy</button>
+      <a href="/{{.Project.Slug}}/" target="_blank" class="btn-text">open site</a>
+      <button
+        class="btn-text btn-text--muted"
+        hx-delete="/projects/{{.Project.Slug}}"
+        hx-confirm="Delete &quot;{{.Project.Slug}}&quot;? This removes the local checkout too."
+        hx-target="body">delete project</button>
+    </div>
+
+    <!-- Key-value details -->
+    <div class="section-gap kv-section">
+      <dl class="kv-list">
+        <dt>repo</dt>
+        <dd>{{.Project.RepoOwner}}/{{.Project.RepoName}}</dd>
+        <dt>branch</dt>
+        <dd>{{.Project.Branch}}</dd>
+        {{if .Project.Subdir}}
+        <dt>subdir</dt>
+        <dd>{{.Project.Subdir}}</dd>
+        {{end}}
+        <dt>served from</dt>
+        <dd>/{{.Project.Slug}}/</dd>
+        {{if .WebhookURL}}
+        <dt>webhook</dt>
+        <dd>
+          <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{.WebhookURL}}</span>
+            <button
+              class="btn-text"
+              style="flex-shrink:0;"
+              onclick="navigator.clipboard.writeText('{{.WebhookURL}}').then(()=>{this.textContent='copied';setTimeout(()=>this.textContent='copy',2000)})">copy</button>
+          </span>
+        </dd>
+        {{end}}
+      </dl>
+    </div>
+
+    <!-- Last deploy log block -->
+    <div class="section-gap">
+      <h2 class="section-heading">last deploy</h2>
+      {{if .Project.LastError}}
+      <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     error: {{.Project.LastError}}</div>
+      {{else if eq .Project.Status "cloning"}}
+      <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     cloning {{.Project.RepoOwner}}/{{.Project.RepoName}} ({{.Project.Branch}})…</div>
+      {{else}}
+      <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     fetch {{.Project.Branch}}{{if .Project.LastCommit}} ({{slice .Project.LastCommit 0 7}}){{end}}
+{{.Project.UpdatedAt.Format "15:04:05"}}  deploy  ok
+{{.Project.UpdatedAt.Format "15:04:05"}}  router  serving at /{{.Project.Slug}}/</div>
+      {{end}}
+    </div>
+
+    <!-- Deploys table -->
+    {{if .Deploys}}
+    <div class="section-gap">
+      <h2 class="section-heading">deploys</h2>
+      <div class="table-scroll" style="margin-top:16px;">
+        <table class="deploys-table" aria-label="Deploy history">
+          <thead>
+            <tr>
+              <th scope="col">sha</th>
+              <th scope="col">commit</th>
+              <th scope="col">when</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Deploys}}
+            <tr>
+              <td>{{.SHA}}</td>
+              <td>{{.Message}}</td>
+              <td>{{.When}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
       </div>
     </div>
     {{end}}
+
   </div>
+</main>
+{{end}}
 
-  <!-- Action Buttons -->
-  <div class="flex items-center gap-3 flex-wrap">
-    <a href="/{{.Project.Slug}}/" target="_blank"
-       class="inline-flex items-center gap-2 text-sm font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 px-4 py-2.5 rounded-xl transition-all hover:border-zinc-600">
-      <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-      </svg>
-      Open App
-    </a>
-
-    <button
-      class="inline-flex items-center gap-2 text-sm font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/60 px-4 py-2.5 rounded-xl transition-all"
-      hx-post="/projects/{{.Project.Slug}}/redeploy"
-      hx-target="#project-{{.Project.Slug}}"
-      hx-swap="outerHTML"
-      hx-indicator="#deploy-spinner">
-      <svg id="deploy-spinner" class="htmx-indicator animate-spin h-4 w-4 text-emerald-400 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-      </svg>
-      Redeploy
-    </button>
-
-    <button
-      class="inline-flex items-center gap-2 text-sm font-semibold text-rose-400 bg-rose-950/40 hover:bg-rose-950/80 border border-rose-900/60 hover:border-rose-800 px-4 py-2.5 rounded-xl transition-all ml-auto"
-      hx-delete="/projects/{{.Project.Slug}}"
-      hx-confirm="Delete &quot;{{.Project.Slug}}&quot;? This removes the local checkout too."
-      hx-target="body">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-      </svg>
-      Delete project
-    </button>
-  </div>
-</div>
+{{define "footer"}}
+<p>
+  pilo{{if .Version}} · {{.Version}}{{end}}{{if .Port}} · :{{.Port}}{{end}}{{if .SitesPath}} · {{.SitesPath}}{{end}}
+</p>
 {{end}}

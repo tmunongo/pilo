@@ -1,96 +1,43 @@
 {{define "project_row"}}
-<div id="project-{{.Slug}}" class="group relative bg-zinc-900/60 hover:bg-zinc-900/90 border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-5 shadow-lg shadow-black/20 transition-all duration-200 hover:-translate-y-0.5 flex flex-col justify-between"
-     x-data="{ searchMatch(query) { if (!query) return true; const text = '{{.Slug}} {{.RepoOwner}}/{{.RepoName}} {{.Branch}}'.toLowerCase(); return text.includes(query.toLowerCase()); } }"
-     x-show="searchMatch(search)"
-     x-transition:enter="transition ease-out duration-200"
-     x-transition:enter-start="opacity-0 scale-95"
-     x-transition:enter-end="opacity-100 scale-100">
-  
-  <div>
-    <!-- Top row: Slug title & Status Badge -->
-    <div class="flex items-center justify-between gap-3 mb-2.5">
-      <a href="/projects/{{.Slug}}" class="font-bold text-lg text-zinc-100 group-hover:text-emerald-400 transition-colors truncate tracking-tight" title="{{.Slug}}">
-        {{.Slug}}
-      </a>
-      {{template "status_badge" .}}
-    </div>
-
-    <!-- Repository details -->
-    <div class="flex items-center gap-2 text-xs text-zinc-400 mb-4 font-mono">
-      <span class="flex items-center gap-1.5 text-zinc-300">
-        <svg class="w-3.5 h-3.5 text-zinc-500" fill="currentColor" viewBox="0 0 24 24">
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
-        </svg>
-        <span>{{.RepoOwner}}/{{.RepoName}}</span>
-      </span>
-      <span class="text-zinc-700">·</span>
-      <span class="bg-zinc-800/80 px-2 py-0.5 rounded text-[11px] text-zinc-400 font-sans font-medium border border-zinc-700/50">
-        {{.Branch}}
-      </span>
-    </div>
-
-    <!-- Commit Hash tag -->
-    {{if .LastCommit}}
-    <div class="flex items-center gap-1.5 text-xs text-zinc-400 mb-5 bg-zinc-950/60 p-2 rounded-lg border border-zinc-800/60 font-mono">
-      <svg class="w-3.5 h-3.5 text-emerald-500/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-      </svg>
-      <span class="text-zinc-500">commit</span>
-      <span class="text-emerald-400 font-semibold truncate">{{.LastCommit}}</span>
-    </div>
-    {{else}}
-    <div class="h-9 mb-5"></div>
-    {{end}}
-  </div>
-
-  <!-- Bottom action controls -->
-  <div class="flex items-center gap-2 pt-3 border-t border-zinc-800/80">
-    <a href="/{{.Slug}}/" target="_blank" class="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 hover:text-white px-3 py-2 rounded-xl border border-zinc-700/50 transition-all">
-      <span>Open App</span>
-      <svg class="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-      </svg>
+<tr id="project-{{.Slug}}" onclick="window.location='/projects/{{.Slug}}'" style="cursor: pointer;">
+  <td class="cell-domain">
+    <a href="/projects/{{.Slug}}" style="display:block;">{{.Slug}}</a>
+  </td>
+  <td>
+    <a href="/projects/{{.Slug}}" style="display:block;">{{.RepoOwner}}/{{.RepoName}} @ {{.Branch}}</a>
+  </td>
+  <td>
+    <a href="/projects/{{.Slug}}" style="display:block;">
+      {{if .LastCommit}}{{slice .LastCommit 0 7}}{{else}}—{{end}}
     </a>
-    
-    <button
-      class="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/60 px-3.5 py-2 rounded-xl transition-all disabled:opacity-50"
-      hx-post="/projects/{{.Slug}}/redeploy"
-      hx-target="#project-{{.Slug}}"
-      hx-swap="outerHTML"
-      hx-indicator="#redeploy-spinner-{{.Slug}}">
-      
-      <svg id="redeploy-spinner-{{.Slug}}" class="htmx-indicator animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-emerald-400 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-
-      <span>Redeploy</span>
-    </button>
-  </div>
-</div>
+  </td>
+  <td>
+    <a href="/projects/{{.Slug}}" style="display:block;">
+      {{template "status_cell" .}}
+    </a>
+  </td>
+</tr>
 {{end}}
 
-{{define "status_badge"}}
-  {{if eq .Status "live"}}
-    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm shadow-emerald-950">
-      <span class="relative flex h-2 w-2">
-        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-      </span>
-      <span>live</span>
-    </span>
-  {{else if eq .Status "cloning"}}
-    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-400 border border-amber-800/60 shadow-sm shadow-amber-950">
-      <svg class="animate-spin h-3 w-3 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-      </svg>
-      <span>cloning…</span>
-    </span>
-  {{else}}
-    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/60 shadow-sm shadow-rose-950" title="{{.LastError}}">
-      <span class="h-2 w-2 rounded-full bg-rose-500"></span>
-      <span>error</span>
-    </span>
-  {{end}}
+{{define "status_cell"}}
+{{if eq .Status "cloning"}}
+  <span class="status-cell">
+    <span class="lamp-mark lamp-mark--building" aria-hidden="true"></span>
+    building
+  </span>
+{{else if eq .Status "live"}}
+  <span class="status-cell">
+    {{if isFresh .UpdatedAt}}
+      <span class="lamp-mark lamp-mark--solid" aria-hidden="true"></span>
+      {{reltime .UpdatedAt}}
+    {{else}}
+      <span class="lamp-mark lamp-mark--idle" aria-hidden="true"></span>
+      {{reltime .UpdatedAt}}
+    {{end}}
+  </span>
+{{else}}
+  <span class="status-cell status-failed">
+    × failed{{if not .UpdatedAt.IsZero}} {{reltime .UpdatedAt}}{{end}}
+  </span>
+{{end}}
 {{end}}

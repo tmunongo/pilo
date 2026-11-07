@@ -1,155 +1,79 @@
-{{define "title"}}Pilo · Settings{{end}}
+{{define "title"}}pilo · settings{{end}}
 
-{{define "content"}}
-<div class="max-w-2xl" x-data="{ showToken: false, showSecret: false }">
-  <!-- Page Heading -->
-  <div class="mb-8">
-    <h1 class="text-2xl font-bold text-white tracking-tight">Settings</h1>
-    <p class="text-sm text-zinc-400 mt-1">Configure GitHub credentials and webhook integration.</p>
-  </div>
+{{define "main"}}
+<main class="detail-screen">
+  <div class="shell">
 
-  {{if .Saved}}
-  <div class="flex items-center gap-3 border border-emerald-800/60 bg-emerald-950/40 text-emerald-300 rounded-xl px-4 py-3.5 mb-6 text-sm backdrop-blur">
-    <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-    </svg>
-    <span class="font-medium">Settings saved successfully.</span>
-  </div>
-  {{end}}
+    <h1 class="page-title">Settings</h1>
+    <p class="page-lead" style="margin-top:16px;">GitHub credentials and webhook configuration.</p>
 
-  <form method="post" action="/settings" class="space-y-5">
+    {{if .Saved}}
+    <div class="notice" style="margin-top:32px;">Settings saved.</div>
+    {{end}}
 
-    <!-- GitHub PAT Card -->
-    <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur shadow-lg shadow-black/20">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-zinc-300">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
-            </svg>
-          </div>
-          <div>
-            <p class="text-sm font-bold text-zinc-200">GitHub Personal Access Token</p>
-            <p class="text-xs text-zinc-500">Required for cloning private repositories</p>
-          </div>
+    <form method="post" action="/settings">
+
+      <!-- GitHub PAT -->
+      <div class="kv-section section-gap">
+        <h2 class="section-heading" style="padding-block:14px 0;">GitHub personal access token</h2>
+        <p class="section-prose" style="margin-top:4px; margin-bottom:16px;">
+          Required to clone private repositories. Use a fine-grained read-only token with <code style="font-family:'IBM Plex Mono',monospace; font-size:13px;">contents</code> scope.
+          {{if .HasToken}}<span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted);"> · currently set</span>{{end}}
+        </p>
+        <div class="form-group">
+          <label for="github_token">token</label>
+          <input
+            id="github_token"
+            type="password"
+            name="github_token"
+            class="form-input"
+            placeholder="{{if .HasToken}}leave blank to keep current{{else}}ghp_xxxxxxxxxxxxxxxxxxxx{{end}}"
+            autocomplete="off">
         </div>
-        {{if .HasToken}}
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-          <span class="relative flex h-1.5 w-1.5">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-          </span>
-          Configured
-        </span>
-        {{else}}
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-          <span class="h-1.5 w-1.5 rounded-full bg-zinc-500"></span>
-          Not set
-        </span>
+      </div>
+
+      <!-- Webhook Secret -->
+      <div class="kv-section section-gap">
+        <h2 class="section-heading" style="padding-block:14px 0;">Webhook secret</h2>
+        <p class="section-prose" style="margin-top:4px; margin-bottom:16px;">
+          Optional. Enables Pilo to verify that pushes come from GitHub. Set the same value in your repo's webhook settings.
+          {{if .HasSecret}}<span style="font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--muted);"> · currently set</span>{{end}}
+        </p>
+        <div class="form-group">
+          <label for="webhook_secret">secret</label>
+          <input
+            id="webhook_secret"
+            type="password"
+            name="webhook_secret"
+            class="form-input"
+            placeholder="{{if .HasSecret}}leave blank to keep current{{else}}a strong random string{{end}}"
+            autocomplete="off">
+        </div>
+
+        {{if .WebhookURL}}
+        <p class="section-prose" style="margin-bottom:8px; font-size:15px;">Webhook endpoint:</p>
+        <div class="webhook-box">
+          <code>{{.WebhookURL}}</code>
+          <button
+            type="button"
+            class="btn-text"
+            onclick="navigator.clipboard.writeText('{{.WebhookURL}}').then(()=>{this.textContent='copied';setTimeout(()=>this.textContent='copy',2000)})">copy</button>
+        </div>
+        <p class="section-prose" style="margin-top:8px; font-size:14px; font-family:'IBM Plex Mono',monospace;">Set content type to application/json and use the secret above.</p>
         {{end}}
       </div>
 
-      <div class="relative">
-        <input
-          :type="showToken ? 'text' : 'password'"
-          name="github_token"
-          placeholder="{{if .HasToken}}•••••••••••••••• (leave blank to keep current){{else}}ghp_xxxxxxxxxxxxxxxxxxxx{{end}}"
-          class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl pl-4 pr-12 py-2.5 text-zinc-100 placeholder-zinc-600 transition-all outline-none font-mono text-sm">
-        <button
-          type="button"
-          @click="showToken = !showToken"
-          class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors">
-          <svg x-show="!showToken" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-          </svg>
-          <svg x-show="showToken" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-          </svg>
-        </button>
+      <div style="margin-top:32px;">
+        <button type="submit" class="btn-primary">save settings</button>
       </div>
-      <p class="text-xs text-zinc-500 mt-2">
-        Use a fine-grained token with read-only <code class="text-zinc-400 bg-zinc-800 px-1 py-0.5 rounded font-mono text-[11px]">contents</code> scope for each repo you want Pilo to deploy.
-      </p>
-    </div>
+    </form>
 
-    <!-- Webhook Secret Card -->
-    <div class="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur shadow-lg shadow-black/20">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700/50 flex items-center justify-center text-zinc-300">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
-          </div>
-          <div>
-            <p class="text-sm font-bold text-zinc-200">Webhook Secret</p>
-            <p class="text-xs text-zinc-500">Optional — enables auto-redeploy on GitHub push</p>
-          </div>
-        </div>
-        {{if .HasSecret}}
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-          <span class="relative flex h-1.5 w-1.5">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-          </span>
-          Configured
-        </span>
-        {{else}}
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-          <span class="h-1.5 w-1.5 rounded-full bg-zinc-500"></span>
-          Not set
-        </span>
-        {{end}}
-      </div>
+  </div>
+</main>
+{{end}}
 
-      <div class="relative">
-        <input
-          :type="showSecret ? 'text' : 'password'"
-          name="webhook_secret"
-          placeholder="{{if .HasSecret}}•••••••••••••••• (leave blank to keep current){{else}}a strong random secret string{{end}}"
-          class="w-full bg-zinc-950/60 border border-zinc-700/80 hover:border-zinc-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl pl-4 pr-12 py-2.5 text-zinc-100 placeholder-zinc-600 transition-all outline-none font-mono text-sm">
-        <button
-          type="button"
-          @click="showSecret = !showSecret"
-          class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 transition-colors">
-          <svg x-show="!showSecret" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-          </svg>
-          <svg x-show="showSecret" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
-          </svg>
-        </button>
-      </div>
-
-      <!-- Webhook URL copy box -->
-      <div class="mt-4">
-        <p class="text-xs text-zinc-500 mb-2">Point your GitHub repo webhook to this URL:</p>
-        <div class="flex items-center gap-2 bg-zinc-950/60 border border-zinc-800/60 rounded-xl px-4 py-2.5">
-          <svg class="w-3.5 h-3.5 text-zinc-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
-          </svg>
-          <code class="text-xs font-mono text-zinc-300 flex-1 truncate">{{.WebhookURL}}</code>
-          <button type="button" @click="copyToClipboard('{{.WebhookURL}}')" class="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 font-sans">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-            Copy
-          </button>
-        </div>
-        <p class="text-xs text-zinc-600 mt-2">Set content type to <code class="text-zinc-500 font-mono text-[11px]">application/json</code> and use the secret above as the webhook secret.</p>
-      </div>
-    </div>
-
-    <!-- Save Button -->
-    <button type="submit"
-      class="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-5 py-3 rounded-xl shadow-lg shadow-emerald-950/50 hover:shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all text-sm">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
-      </svg>
-      Save Settings
-    </button>
-  </form>
-</div>
+{{define "footer"}}
+<p>
+  pilo{{if .Version}} · {{.Version}}{{end}}{{if .Port}} · :{{.Port}}{{end}}{{if .SitesPath}} · {{.SitesPath}}{{end}}
+</p>
 {{end}}

@@ -21,23 +21,45 @@ import (
 
 // Handlers holds everything the admin UI needs to do its job.
 type Handlers struct {
-	Store    *store.Store
-	Deployer *deploy.Deployer
-	Router   *Router
-	Pages    map[string]*template.Template
-	Partials *template.Template
-	BaseURL  string // used to render the webhook URL on the settings page
+	Store     *store.Store
+	Deployer  *deploy.Deployer
+	Router    *Router
+	Pages     map[string]*template.Template
+	Partials  *template.Template
+	BaseURL   string // used to render the webhook URL on the settings page
+	Port      string
+	SitesPath string
+	Version   string
 }
 
 func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) *Handlers {
-	return &Handlers{
-		Store:    s,
-		Deployer: d,
-		Router:   r,
-		Pages:    web.Templates(),
-		Partials: web.PartialsTemplate(),
-		BaseURL:  baseURL,
+	sitesPath := ""
+	if d != nil {
+		sitesPath = d.ReposRoot
 	}
+	return &Handlers{
+		Store:     s,
+		Deployer:  d,
+		Router:    r,
+		Pages:     web.Templates(),
+		Partials:  web.PartialsTemplate(),
+		BaseURL:   baseURL,
+		SitesPath: sitesPath,
+	}
+}
+
+func (h *Handlers) commonData(activeNav string, extra map[string]any) map[string]any {
+	data := map[string]any{
+		"ActiveNav":  activeNav,
+		"Port":       h.Port,
+		"SitesPath":  h.SitesPath,
+		"Version":    h.Version,
+		"WebhookURL": h.BaseURL + "/webhooks/github",
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	return data
 }
 
 // Mux builds the admin http.Handler with all routes registered.
@@ -57,15 +79,24 @@ func (h *Handlers) Mux() http.Handler {
 }
 
 func (h *Handlers) Index(w http.ResponseWriter, r *http.Request) {
-	render(w, h.Pages["index"], map[string]any{
-		"Projects": h.Store.All(),
-	})
+	projects := h.Store.All()
+	var building bool
+	for _, p := range projects {
+		if p.Status == store.StatusCloning {
+			building = true
+			break
+		}
+	}
+	render(w, h.Pages["index"], h.commonData("projects", map[string]any{
+		"Projects":        projects,
+		"BuildingProject": building,
+	}))
 }
 
 func (h *Handlers) NewForm(w http.ResponseWriter, r *http.Request) {
-	render(w, h.Pages["new"], map[string]any{
+	render(w, h.Pages["new"], h.commonData("", map[string]any{
 		"Form": map[string]string{},
-	})
+	}))
 }
 
 var repoURLPattern = regexp.MustCompile(`github\.com[:/]([\w.-]+)/([\w.-]+?)(\.git)?/?$`)
@@ -98,7 +129,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fail := func(msg string) {
-		render(w, h.Pages["new"], map[string]any{"Error": msg, "Form": form})
+		render(w, h.Pages["new"], h.commonData("", map[string]any{
+			"Error": msg,
+			"Form":  form,
+		}))
 	}
 
 	owner, name, err := parseRepo(form["repo"])
@@ -181,7 +215,14 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	render(w, h.Pages["project"], map[string]any{"Project": p})
+	var deploys []deploy.CommitInfo
+	if h.Deployer != nil {
+		deploys = h.Deployer.Commits(p.Slug, 5)
+	}
+	render(w, h.Pages["project"], h.commonData("", map[string]any{
+		"Project": p,
+		"Deploys": deploys,
+	}))
 }
 
 func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +244,12 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.Store.Put(p)
 
-	renderPartial(w, h.Partials, "project_row", p)
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Refresh", "true")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
 }
 
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
@@ -222,11 +268,10 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SettingsForm(w http.ResponseWriter, r *http.Request) {
-	render(w, h.Pages["settings"], map[string]any{
-		"HasToken":   h.Store.GitHubToken != "",
-		"HasSecret":  h.Store.WebhookSecret != "",
-		"WebhookURL": h.BaseURL + "/webhooks/github",
-	})
+	render(w, h.Pages["settings"], h.commonData("settings", map[string]any{
+		"HasToken":  h.Store.GitHubToken != "",
+		"HasSecret": h.Store.WebhookSecret != "",
+	}))
 }
 
 func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
@@ -240,12 +285,11 @@ func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
 	if sec := r.FormValue("webhook_secret"); sec != "" {
 		_ = h.Store.SetWebhookSecret(sec)
 	}
-	render(w, h.Pages["settings"], map[string]any{
-		"Saved":      true,
-		"HasToken":   h.Store.GitHubToken != "",
-		"HasSecret":  h.Store.WebhookSecret != "",
-		"WebhookURL": h.BaseURL + "/webhooks/github",
-	})
+	render(w, h.Pages["settings"], h.commonData("settings", map[string]any{
+		"Saved":     true,
+		"HasToken":  h.Store.GitHubToken != "",
+		"HasSecret": h.Store.WebhookSecret != "",
+	}))
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {

@@ -84,6 +84,38 @@ func (d *Deployer) Remove(slug string) error {
 	return os.RemoveAll(d.PathFor(slug))
 }
 
+// CommitInfo represents a single git commit from a project checkout.
+type CommitInfo struct {
+	SHA     string
+	Message string
+	When    string
+}
+
+// Commits returns the most recent commits for a project checkout.
+func (d *Deployer) Commits(slug string, limit int) []CommitInfo {
+	dest := d.PathFor(slug)
+	if _, err := os.Stat(dest); err != nil {
+		return nil
+	}
+	out, err := runGit(dest, "log", fmt.Sprintf("-n%d", limit), "--format=%h\x1f%s\x1f%cr")
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var commits []CommitInfo
+	for _, l := range lines {
+		parts := strings.Split(l, "\x1f")
+		if len(parts) >= 3 {
+			commits = append(commits, CommitInfo{
+				SHA:     parts[0],
+				Message: parts[1],
+				When:    parts[2],
+			})
+		}
+	}
+	return commits
+}
+
 func (d *Deployer) headCommit(dir string) (string, error) {
 	out, err := runGit(dir, "rev-parse", "--short", "HEAD")
 	if err != nil {
