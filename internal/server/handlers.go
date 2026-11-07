@@ -132,6 +132,8 @@ func (h *Handlers) Mux() http.Handler {
 	mux.Handle("GET /projects/new", h.requireAuth(http.HandlerFunc(h.NewForm)))
 	mux.Handle("POST /projects", h.requireAuth(http.HandlerFunc(h.Create)))
 	mux.Handle("GET /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Detail)))
+	mux.Handle("GET /projects/{slug}/edit", h.requireAuth(http.HandlerFunc(h.EditForm)))
+	mux.Handle("POST /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Update)))
 	mux.Handle("POST /projects/{slug}/redeploy", h.requireAuth(http.HandlerFunc(h.Redeploy)))
 	mux.Handle("DELETE /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Delete)))
 	mux.Handle("GET /settings", h.requireAuth(http.HandlerFunc(h.SettingsForm)))
@@ -378,8 +380,11 @@ func (h *Handlers) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) NewForm(w http.ResponseWriter, r *http.Request) {
+	u := userFromContext(r.Context())
+	tok := h.Store.EffectiveGitHubToken(u.ID)
 	render(w, h.Pages["new"], h.commonData(r, "", map[string]any{
-		"Form": map[string]string{},
+		"Form":     map[string]string{},
+		"HasToken": tok != "",
 	}))
 }
 
@@ -413,10 +418,12 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		"subdir": r.FormValue("subdir"),
 	}
 
+	tok := h.Store.EffectiveGitHubToken(u.ID)
 	fail := func(msg string) {
 		render(w, h.Pages["new"], h.commonData(r, "", map[string]any{
-			"Error": msg,
-			"Form":  form,
+			"Error":    msg,
+			"Form":     form,
+			"HasToken": tok != "",
 		}))
 	}
 
@@ -464,7 +471,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.deployAndRegister(p)
+	go h.deployAndRegister(p)
 
 	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
 }
@@ -554,6 +561,80 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	_ = h.Store.DeleteForUser(slug, u.ID)
 
 	w.Header().Set("HX-Redirect", "/")
+}
+
+func (h *Handlers) EditForm(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	u := userFromContext(r.Context())
+	p := h.Store.GetForUser(slug, u.ID)
+	if p == nil {
+		http.NotFound(w, r)
+		return
+	}
+	render(w, h.Pages["edit"], h.commonData(r, "", map[string]any{
+		"Project": p,
+		"Form": map[string]string{
+			"repo":   p.RepoOwner + "/" + p.RepoName,
+			"branch": p.Branch,
+			"subdir": p.Subdir,
+		},
+	}))
+}
+
+func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	u := userFromContext(r.Context())
+	p := h.Store.GetForUser(slug, u.ID)
+	if p == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	form := map[string]string{
+		"repo":   r.FormValue("repo"),
+		"branch": r.FormValue("branch"),
+		"subdir": r.FormValue("subdir"),
+	}
+
+	fail := func(msg string) {
+		render(w, h.Pages["edit"], h.commonData(r, "", map[string]any{
+			"Error":   msg,
+			"Project": p,
+			"Form":    form,
+		}))
+	}
+
+	owner, name, err := parseRepo(form["repo"])
+	if err != nil {
+		fail(err.Error())
+		return
+	}
+
+	branch := strings.TrimSpace(form["branch"])
+	if branch == "" {
+		branch = "main"
+	}
+
+	p.RepoOwner = owner
+	p.RepoName = name
+	p.Branch = branch
+	p.Subdir = strings.TrimSpace(form["subdir"])
+	p.Status = store.StatusCloning
+	p.LastError = ""
+
+	if err := h.Store.Put(p); err != nil {
+		fail("failed to save project: " + err.Error())
+		return
+	}
+
+	go h.deployAndRegister(p)
+
+	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
 }
 
 func (h *Handlers) SettingsForm(w http.ResponseWriter, r *http.Request) {

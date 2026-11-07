@@ -81,6 +81,7 @@ var funcMap = template.FuncMap{
 var pageFiles = map[string]string{
 	"index":           "templates/index.html",
 	"new":             "templates/new.html",
+	"edit":            "templates/edit.html",
 	"project":         "templates/project.html",
 	"settings":        "templates/settings.html",
 	"login":           "templates/login.html",

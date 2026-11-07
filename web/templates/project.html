@@ -31,6 +31,7 @@
       <button
         class="btn-primary"
         hx-post="/projects/{{.Project.Slug}}/redeploy">redeploy</button>
+      <a href="/projects/{{.Project.Slug}}/edit" class="btn-text">edit</a>
       <a href="/{{.Project.Slug}}/" target="_blank" class="btn-text">open site</a>
       <button
         class="btn-text btn-text--muted"

@@ -13,6 +13,13 @@
     <div class="notice notice--error" style="margin-top:32px;">{{.Error}}</div>
     {{end}}
 
+    {{if not .HasToken}}
+    <div class="notice notice--warn" style="margin-top:32px;">
+      No GitHub token set. Public repos will work, but private repos will fail to clone.
+      <a href="/settings" class="btn-text" style="font-size:inherit; font-family:inherit;">Add a token →</a>
+    </div>
+    {{end}}
+
     <form method="post" action="/projects">
 
       <div class="kv-section section-gap">
