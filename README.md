@@ -53,7 +53,7 @@ Pilo turns any machine (VPS, home server, or Raspberry Pi) into a micro-PaaS. It
 - 🔄 **Dynamic Routing**: Instant route registration without restarting the server.
 - 🔐 **GitHub Webhook Sync**: Verified HMAC `X-Hub-Signature-256` payload processing for auto-pulling main branches.
 - 📦 **Multi-Arch Docker Images**: Native support for `amd64` and `arm64` (Raspberry Pi).
-- 🔒 **Production Ready**: Fully integrable with reverse proxies like Traefik, Nginx, or Caddy.
+- 🔒 **Production Ready**: Zero-downtime deployments via Kamal with automated Let's Encrypt SSL, or behind any reverse proxy.
 
 ---
 
@@ -165,90 +165,27 @@ docker compose up -d
 
 ---
 
-### Option 3: Production Deployment with Traefik (HTTPS / Automated SSL)
+### Option 3: Production Deployment with Kamal (Automated Zero-Downtime & SSL)
 
-Traefik is a modern HTTP reverse proxy and load balancer that automatically provisions SSL/TLS certificates via Let's Encrypt.
+Pilo is configured for zero-downtime production deployments with [Kamal](https://kamal-deploy.org/) using `kamal-proxy` for SSL termination and traffic routing.
 
-#### Architecture
+#### Step 1: Configure Credentials
 
-```
-[ Client Request ] ──(HTTPS:443)──► [ Traefik Proxy ] ──(HTTP:8080)──► [ Pilo Container ]
-                                          │
-                            (Automatic Let's Encrypt SSL)
-```
-
-#### Step 1: Prepare `docker-compose.traefik.yml`
-
-Use the included [`docker-compose.traefik.yml`](file:///Users/tawanda/Projects/pilo/docker-compose.traefik.yml) configuration:
-
-```yaml
-version: '3.8'
-
-services:
-  traefik:
-    image: traefik:v3.1
-    container_name: traefik
-    restart: unless-stopped
-    command:
-      - "--api.insecure=false"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.myresolver.acme.email=admin@yourdomain.com"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "traefik-certificates:/letsencrypt"
-    networks:
-      - web
-
-  pilo:
-    image: ghcr.io/tmunongo/pilo:latest
-    container_name: pilo
-    restart: unless-stopped
-    environment:
-      - PILO_PORT=8080
-      - PILO_DATA_DIR=/data
-      - PILO_BASE_URL=https://pilo.yourdomain.com
-    volumes:
-      - pilo-data:/data
-    networks:
-      - web
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.pilo.rule=Host(`pilo.yourdomain.com`)"
-      - "traefik.http.routers.pilo.entrypoints=websecure"
-      - "traefik.http.routers.pilo.tls.certresolver=myresolver"
-      - "traefik.http.services.pilo.loadbalancer.server.port=8080"
-
-volumes:
-  pilo-data:
-    driver: local
-  traefik-certificates:
-    driver: local
-
-networks:
-  web:
-    driver: bridge
-```
-
-#### Step 2: Configure Domain DNS
-Point your domain's A/AAAA DNS records (e.g., `pilo.yourdomain.com`) to your server's public IP address.
-
-#### Step 3: Launch Stack
+Ensure `.env.production` contains your GitHub Container Registry token:
 
 ```bash
-docker compose -f docker-compose.traefik.yml up -d
+KAMAL_REGISTRY_PASSWORD=ghp_your_personal_access_token
 ```
 
-Traefik will handle SSL certificate generation automatically, redirect HTTP to HTTPS, and route incoming requests directly to Pilo.
+#### Step 2: Deploy
+
+Deploy to your production server:
+
+```bash
+./bin/kamal deploy
+```
+
+`kamal-proxy` automatically provisions Let's Encrypt certificates, manages zero-downtime rolling deploys, and routes requests to Pilo.
 
 ---
 
