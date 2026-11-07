@@ -1,0 +1,7 @@
+.git
+.github
+data
+.env*
+.DS_Store
+.kamal
+pilo

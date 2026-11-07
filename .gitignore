@@ -8,3 +8,6 @@ data
 .air/
 build-errors.log
 pilo
+
+# Environment and secrets
+.env*

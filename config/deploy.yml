@@ -1,0 +1,54 @@
+<% require "dotenv"; Dotenv.load(".env.production") %>
+
+# Name of your application. Used to uniquely configure containers.
+service: pilo
+
+# Name of the container image.
+image: tmunongo/pilo
+
+# Deploy to these servers.
+servers:
+  web:
+    - 138.2.164.78
+
+# Enable SSL auto certification via Let's Encrypt and allow for multiple apps on a single web server.
+proxy:
+  ssl: true
+  host: pilo.webbe.dev
+  # Proxy connects to your container on port 80 by default.
+  app_port: 8080
+  healthcheck:
+    path: /health
+    interval: 2
+    timeout: 2
+
+# Credentials for your image host.
+registry:
+  server: ghcr.io
+  username: tmunongo
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+# Configure builder setup.
+builder:
+  arch: amd64
+  local: false
+  remote: ssh://ubuntu@138.2.164.78
+
+# Use a different ssh user than root
+ssh:
+  user: ubuntu
+
+# Inject ENV variables into containers (secrets come from .kamal/secrets).
+env:
+  clear:
+    PILO_PORT: 8080
+    PILO_DATA_DIR: /data
+    PILO_BASE_URL: https://pilo.webbe.dev
+
+aliases:
+  shell: app exec --interactive --reuse "sh"
+
+# Use a persistent storage volume.
+volumes:
+  - "pilo:/data"
