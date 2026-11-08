@@ -212,6 +212,9 @@ func TestPagesRender(t *testing.T) {
 	if !strings.Contains(body, "× failed") {
 		t.Errorf("expected × failed for error project")
 	}
+	if !strings.Contains(body, `hx-trigger="every 1.5s"`) {
+		t.Errorf("expected index page to poll when a project is building")
+	}
 
 	// 7. New project page
 	req = httptest.NewRequest("GET", "/projects/new", nil)
@@ -243,6 +246,22 @@ func TestPagesRender(t *testing.T) {
 	}
 	if !strings.Contains(body, "redeploy") {
 		t.Errorf("expected redeploy button")
+	}
+	if strings.Contains(body, `hx-trigger="every 1.5s"`) {
+		t.Errorf("live project should not have polling trigger")
+	}
+
+	// 8b. Project detail page for building project should poll
+	req = httptest.NewRequest("GET", "/projects/building-app", nil)
+	req.AddCookie(sessionCookie)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("building project detail page returned status %d", rec.Code)
+	}
+	body = rec.Body.String()
+	if !strings.Contains(body, `hx-trigger="every 1.5s"`) {
+		t.Errorf("expected building project detail page to poll with hx-trigger")
 	}
 
 	// 9. Cross-tenant isolation: Owner cannot access other-app

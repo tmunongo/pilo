@@ -1,7 +1,7 @@
 {{define "title"}}pilo · projects{{end}}
 
 {{define "main"}}
-<main class="list-screen">
+<main class="list-screen" id="index-screen"{{if .BuildingProject}} hx-get="/" hx-trigger="every 1.5s" hx-select="#index-screen" hx-target="#index-screen" hx-swap="outerHTML"{{end}}>
   <div class="shell">
 
     <h1 class="page-title">Projects</h1>
