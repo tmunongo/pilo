@@ -30,7 +30,8 @@ func setupTestServer(t *testing.T) (*store.Store, *server.Router, *server.Handle
 	handlers := server.NewHandlers(st, dep, router, "http://localhost:8080")
 	handlers.Port = "8080"
 	handlers.Version = "v0.1.0"
-	handlers.SignupsDisabled = false // enable signups for auth testing
+	disabled := false
+	handlers.SignupsDisabled = &disabled // explicitly enable signups for auth testing
 	router.SetAdmin(handlers.Mux())
 
 	return st, router, handlers
@@ -230,10 +231,8 @@ func TestSignupsDisabled(t *testing.T) {
 
 	router := server.NewRouter(nil)
 	handlers := server.NewHandlers(st, nil, router, "http://localhost:8080")
-	// Verify SignupsDisabled is true by default
-	if !handlers.SignupsDisabled {
-		t.Errorf("expected SignupsDisabled to be true by default")
-	}
+	disabled := true
+	handlers.SignupsDisabled = &disabled
 	router.SetAdmin(handlers.Mux())
 
 	// 1. GET /signup should redirect to login with notice
@@ -282,6 +281,19 @@ func TestSignupsDisabled(t *testing.T) {
 	}
 	if !strings.Contains(recLogin.Body.String(), "Signups are temporarily disabled") {
 		t.Errorf("login page should indicate signups are disabled")
+	}
+
+	// 4. Test Auto mode (SignupsDisabled == nil): open when 0 users, auto-closes once user created
+	autoHandlers := server.NewHandlers(st, nil, router, "http://localhost:8080")
+	if autoHandlers.IsSignupDisabled() {
+		t.Errorf("expected signups to be enabled when no accounts exist in auto mode")
+	}
+	_, err = st.CreateUser("firstuser@example.com", "password123")
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+	if !autoHandlers.IsSignupDisabled() {
+		t.Errorf("expected signups to be auto-disabled once an account exists in auto mode")
 	}
 }
 

@@ -139,6 +139,12 @@ WHERE project_slug = ?
 ORDER BY created_at DESC
 LIMIT ?;
 
+-- name: ListWebhookLogsByProjectSlugAndUserID :many
+SELECT * FROM webhook_logs
+WHERE project_slug = ? AND user_id = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
 -- name: ListWebhookLogsByUserID :many
 SELECT * FROM webhook_logs
 WHERE user_id = ?

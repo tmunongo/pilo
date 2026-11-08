@@ -32,17 +32,17 @@ const (
 
 // Handlers holds everything the admin UI needs to do its job.
 type Handlers struct {
-	Store     *store.Store
-	Deployer  *deploy.Deployer
-	Router    *Router
-	Mailer    *Mailer
-	Pages     map[string]*template.Template
-	Partials  *template.Template
-	BaseURL   string // used to render the webhook URL on the settings page
-	Port      string
+	Store           *store.Store
+	Deployer        *deploy.Deployer
+	Router          *Router
+	Mailer          *Mailer
+	Pages           map[string]*template.Template
+	Partials        *template.Template
+	BaseURL         string // used to render the webhook URL on the settings page
+	Port            string
 	SitesPath       string
 	Version         string
-	SignupsDisabled bool
+	SignupsDisabled *bool // nil = auto (allows first user if 0 users, disabled once >= 1 user exists)
 }
 
 func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) *Handlers {
@@ -51,16 +51,31 @@ func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) 
 		sitesPath = d.ReposRoot
 	}
 	return &Handlers{
-		Store:           s,
-		Deployer:        d,
-		Router:          r,
-		Mailer:          NewMailerFromEnv(),
-		Pages:           web.Templates(),
-		Partials:        web.PartialsTemplate(),
-		BaseURL:         baseURL,
-		SitesPath:       sitesPath,
-		SignupsDisabled: true, // disabled for now due to same-origin cookie/localStorage security
+		Store:     s,
+		Deployer:  d,
+		Router:    r,
+		Mailer:    NewMailerFromEnv(),
+		Pages:     web.Templates(),
+		Partials:  web.PartialsTemplate(),
+		BaseURL:   baseURL,
+		SitesPath: sitesPath,
 	}
+}
+
+// IsSignupDisabled reports whether registrations are currently disabled.
+// If SignupsDisabled is explicitly configured (true or false), that value is used.
+// Otherwise, it auto-disables once at least one account exists.
+func (h *Handlers) IsSignupDisabled() bool {
+	if h.SignupsDisabled != nil {
+		return *h.SignupsDisabled
+	}
+	if h.Store != nil {
+		count, err := h.Store.CountUsers()
+		if err == nil && count > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func withUser(ctx context.Context, u *store.User) context.Context {
@@ -106,7 +121,7 @@ func (h *Handlers) commonData(r *http.Request, activeNav string, extra map[strin
 		"SitesPath":       h.SitesPath,
 		"Version":         h.Version,
 		"WebhookURL":      h.BaseURL + "/webhooks/github",
-		"SignupsDisabled": h.SignupsDisabled,
+		"SignupsDisabled": h.IsSignupDisabled(),
 	}
 	for k, v := range extra {
 		data[k] = v
@@ -236,7 +251,7 @@ func (h *Handlers) SignUpForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	if h.SignupsDisabled {
+	if h.IsSignupDisabled() {
 		http.Redirect(w, r, "/login?notice=Signups+are+temporarily+disabled.", http.StatusSeeOther)
 		return
 	}
@@ -246,7 +261,7 @@ func (h *Handlers) SignUpForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
-	if h.SignupsDisabled {
+	if h.IsSignupDisabled() {
 		log.Printf("auth: signup attempt rejected (signups temporarily disabled)")
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("HX-Redirect", "/login?notice=Signups+are+temporarily+disabled.")
@@ -569,7 +584,11 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		deploys = h.Deployer.Commits(p.Slug, 5)
 	}
 
-	webhookLogs, _ := h.Store.WebhookLogsForProject(p.Slug, 10)
+	webhookLogs, err := h.Store.WebhookLogsForProjectAndUser(p.Slug, u.ID, 10)
+	if err != nil {
+		log.Printf("detail: failed to load webhook logs slug=%s: %v", p.Slug, err)
+		webhookLogs = nil
+	}
 	hasSecret := h.Store.EffectiveWebhookSecret(u.ID) != ""
 	hasWebhooks := hasSecret || len(webhookLogs) > 0
 
@@ -854,19 +873,8 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 	redeployedCount := 0
 	for _, p := range h.Store.All() {
 		if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
-			if p.Branch != branch {
-				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
-					ProjectSlug: p.Slug,
-					UserID:      p.UserID,
-					Event:       event,
-					Delivery:    delivery,
-					Signature:   sig,
-					Status:      "ignored",
-					Message:     fmt.Sprintf("Push to %s ignored (tracks %s)", branch, p.Branch),
-				})
-				continue
-			}
-
+			// Validate per-project signature before any branch checks, so an
+			// invalid signature never produces an "ignored" log entry.
 			sec := h.Store.EffectiveWebhookSecret(p.UserID)
 			if sec != "" && !verifySignature(sec, body, sig) {
 				log.Printf("webhook redeploy %s: invalid signature", p.Slug)
@@ -878,6 +886,19 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 					Signature:   sig,
 					Status:      "error",
 					Message:     fmt.Sprintf("Invalid signature for branch %q", branch),
+				})
+				continue
+			}
+
+			if p.Branch != branch {
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       event,
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "ignored",
+					Message:     fmt.Sprintf("Push to %s ignored (tracks %s)", branch, p.Branch),
 				})
 				continue
 			}
@@ -917,8 +938,9 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 				msg := fmt.Sprintf("Deployed %s on %s", shortCommit, branch)
 				if payload.HeadCommit.Message != "" {
 					firstLine := strings.Split(strings.TrimSpace(payload.HeadCommit.Message), "\n")[0]
-					if len(firstLine) > 50 {
-						firstLine = firstLine[:47] + "..."
+					runes := []rune(firstLine)
+					if len(runes) > 50 {
+						firstLine = string(runes[:47]) + "..."
 					}
 					msg = fmt.Sprintf("Deployed %s (%s)", shortCommit, firstLine)
 				}

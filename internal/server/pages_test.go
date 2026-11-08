@@ -29,7 +29,6 @@ func TestPagesRender(t *testing.T) {
 	handlers := server.NewHandlers(st, dep, router, "http://localhost:8080")
 	handlers.Port = "8080"
 	handlers.Version = "v0.1.0"
-	handlers.SignupsDisabled = false // enable signups for full journey testing
 	router.SetAdmin(handlers.Mux())
 
 	// 1. Unauthenticated access to index should redirect to /login

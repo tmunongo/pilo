@@ -1,10 +1,12 @@
 {{define "title"}}pilo · projects{{end}}
 
 {{define "main"}}
-<main class="list-screen" id="index-screen"{{if .BuildingProject}} hx-get="/" hx-trigger="every 1.5s" hx-select="#index-screen" hx-target="#index-screen" hx-swap="outerHTML"{{end}}>
+<main class="list-screen" id="index-screen">
   <div class="shell">
 
     <h1 class="page-title">Projects</h1>
+
+    <div id="projects-status"{{if .BuildingProject}} hx-get="/" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="innerHTML"{{end}}>
     <p class="page-lead" style="margin-top:16px;">
       {{if not .Projects}}
         Nothing deployed yet. Pilo is listening{{if .Port}} on :{{.Port}}{{end}} and waiting for its first repo.
@@ -89,6 +91,7 @@
     </div>
     {{end}}
     {{end}}
+    </div><!-- #projects-status -->
 
   </div>
 </main>

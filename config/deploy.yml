@@ -53,6 +53,9 @@ env:
     - EMAIL_USE_TLS
     - EMAIL_USE_SSL
     - PORT
+    - PILO_DISABLE_SIGNUPS
+    - PILO_ADMIN_EMAIL
+    - PILO_ADMIN_PASSWORD
 
 aliases:
   shell: app exec --interactive --reuse "sh"

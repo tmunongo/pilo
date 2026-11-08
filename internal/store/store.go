@@ -740,6 +740,29 @@ func (s *Store) WebhookLogsForProject(projectSlug string, limit int) ([]*Webhook
 	return out, nil
 }
 
+// WebhookLogsForProjectAndUser returns the recent webhook logs for a project scoped to its owner,
+// preventing logs from a deleted project appearing for a new project with the same slug.
+func (s *Store) WebhookLogsForProjectAndUser(projectSlug, userID string, limit int) ([]*WebhookLog, error) {
+	ctx := context.Background()
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := s.queries.ListWebhookLogsByProjectSlugAndUserID(ctx, db.ListWebhookLogsByProjectSlugAndUserIDParams{
+		ProjectSlug: projectSlug,
+		UserID:      userID,
+		Limit:       int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var out []*WebhookLog
+	for _, r := range rows {
+		out = append(out, toWebhookLogModel(r))
+	}
+	return out, nil
+}
+
 // LatestWebhookLogForUser returns the most recent webhook log for any project belonging to a user.
 func (s *Store) LatestWebhookLogForUser(userID string) (*WebhookLog, error) {
 	ctx := context.Background()

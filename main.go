@@ -5,10 +5,12 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"pilo/internal/deploy"
 	"pilo/internal/server"
@@ -33,13 +35,38 @@ func main() {
 	}
 	defer st.Close()
 
+	// Auto-provision initial account on first boot if provided via environment.
+	adminEmail := getenv("PILO_ADMIN_EMAIL", getenv("PILO_EMAIL", ""))
+	adminPassword := getenv("PILO_ADMIN_PASSWORD", getenv("PILO_PASSWORD", ""))
+	if adminEmail != "" && adminPassword != "" {
+		if _, err := st.GetUserByEmail(adminEmail); errors.Is(err, store.ErrUserNotFound) {
+			if len(adminPassword) < 8 {
+				log.Printf("auth: admin password must be at least 8 characters long")
+			} else if _, err := st.CreateUser(adminEmail, adminPassword); err != nil {
+				log.Printf("auth: failed to auto-provision initial account for %s: %v", adminEmail, err)
+			} else {
+				log.Printf("auth: provisioned initial account %s from environment", adminEmail)
+			}
+		}
+	}
+
 	dep := deploy.New(filepath.Join(dataDir, "repos"))
 
 	router := server.NewRouter(nil) // admin handler wired in below
 	handlers := server.NewHandlers(st, dep, router, baseURL)
 	handlers.Port = port
 	handlers.Version = getenv("PILO_VERSION", "v0.1.0")
-	handlers.SignupsDisabled = getenv("PILO_DISABLE_SIGNUPS", "true") == "true"
+
+	// PILO_DISABLE_SIGNUPS controls registration.
+	// If unset, it defaults to auto: signups open if no accounts exist, closed once an account exists.
+	// Any value other than the recognized opt-in strings ("false", "0", "no") is treated as disabled.
+	// Comparisons are case- and whitespace-insensitive.
+	if disableSignupsEnv := os.Getenv("PILO_DISABLE_SIGNUPS"); disableSignupsEnv != "" {
+		normalized := strings.TrimSpace(strings.ToLower(disableSignupsEnv))
+		enabled := normalized == "false" || normalized == "0" || normalized == "no"
+		disabled := !enabled
+		handlers.SignupsDisabled = &disabled
+	}
 
 	adminMux := handlers.Mux()
 	router.SetAdmin(adminMux)

@@ -196,6 +196,9 @@ Deploy to your production server:
 | `PILO_DATA_DIR` | `./data` | File path where SQLite database (`paas.db`) and cloned Git repositories are stored |
 | `PILO_PORT` | `8080` | Internal HTTP listening port for the Go server |
 | `PILO_BASE_URL` | `http://localhost:<PORT>` | Public base URL used for rendering GitHub webhook endpoints & reset links |
+| `PILO_DISABLE_SIGNUPS` | _auto_ | Set to `true` to disable signups, or `false` to keep them open. If unset, signups are allowed when 0 accounts exist and automatically close once the first user is created. |
+| `PILO_ADMIN_EMAIL` | _(empty)_ | Email address for initial admin account (automatically created on first boot if it doesn't already exist) |
+| `PILO_ADMIN_PASSWORD` | _(empty)_ | Password for initial admin account (minimum 8 characters) |
 | `SMTP_HOST` | _(empty)_ | Optional SMTP host for sending password reset emails (logs link to stdout when empty) |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | _(empty)_ | SMTP authentication username |
