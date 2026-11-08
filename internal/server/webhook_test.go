@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -64,5 +65,19 @@ func TestGitHubWebhook(t *testing.T) {
 	router.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
 		t.Errorf("expected 200 OK for valid signature, got %d", rec2.Code)
+	}
+
+	// GitHub sends form-encoded payloads when the hook content type is "form".
+	formBody := []byte(url.Values{"payload": {string(payload)}}.Encode())
+	formMAC := hmac.New(sha256.New, []byte("mysecret"))
+	formMAC.Write(formBody)
+	formSig := "sha256=" + hex.EncodeToString(formMAC.Sum(nil))
+	req3 := httptest.NewRequest("POST", "/webhooks/github", bytes.NewReader(formBody))
+	req3.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req3.Header.Set("X-Hub-Signature-256", formSig)
+	rec3 := httptest.NewRecorder()
+	router.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for form-encoded webhook, got %d: %s", rec3.Code, rec3.Body.String())
 	}
 }

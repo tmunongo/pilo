@@ -11,7 +11,9 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"mime"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -139,7 +141,17 @@ func (h *Handlers) Mux() http.Handler {
 	mux.Handle("GET /settings", h.requireAuth(http.HandlerFunc(h.SettingsForm)))
 	mux.Handle("POST /settings", h.requireAuth(http.HandlerFunc(h.SettingsSave)))
 
-	return h.loadUserMiddleware(mux)
+	return h.requestLogger(h.loadUserMiddleware(mux))
+}
+
+func (h *Handlers) requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip noisy health-check paths from logs.
+		if r.URL.Path != "/health" {
+			log.Printf("http: %s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *Handlers) loadUserMiddleware(next http.Handler) http.Handler {
@@ -193,6 +205,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	u, err := h.Store.AuthenticateUser(email, password)
 	if err != nil {
+		log.Printf("auth: login failed for %s: %v", email, err)
 		render(w, h.Pages["login"], h.commonData(r, "login", map[string]any{
 			"Error": "Invalid email or password",
 			"Form":  map[string]string{"email": email},
@@ -202,6 +215,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	sess, err := h.Store.CreateSession(u.ID, 30*24*time.Hour)
 	if err != nil {
+		log.Printf("auth: failed to create session for %s: %v", email, err)
 		render(w, h.Pages["login"], h.commonData(r, "login", map[string]any{
 			"Error": "Failed to create session: " + err.Error(),
 			"Form":  map[string]string{"email": email},
@@ -209,6 +223,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("auth: login ok user=%s", email)
 	setSessionCookie(w, sess.ID)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -251,19 +266,23 @@ func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
 	u, err := h.Store.CreateUser(email, password)
 	if err != nil {
 		if errors.Is(err, store.ErrEmailTaken) {
+			log.Printf("auth: signup failed for %s: email already taken", email)
 			fail("An account with that email already exists")
 			return
 		}
+		log.Printf("auth: signup error for %s: %v", email, err)
 		fail(err.Error())
 		return
 	}
 
 	sess, err := h.Store.CreateSession(u.ID, 30*24*time.Hour)
 	if err != nil {
+		log.Printf("auth: signup ok but session creation failed for %s: %v", email, err)
 		fail("Account created but failed to create session: " + err.Error())
 		return
 	}
 
+	log.Printf("auth: signup ok user=%s id=%s", email, u.ID)
 	setSessionCookie(w, sess.ID)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -271,6 +290,9 @@ func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		_ = h.Store.DeleteSession(cookie.Value)
+		if u := userFromContext(r.Context()); u != nil {
+			log.Printf("auth: logout user=%s", u.Email)
+		}
 	}
 	clearSessionCookie(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -401,7 +423,11 @@ func parseRepo(input string) (owner, name string, err error) {
 	if parts := strings.Split(input, "/"); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
 		return parts[0], strings.TrimSuffix(parts[1], ".git"), nil
 	}
-	return "", "", fmt.Errorf("couldn't parse %q as owner/repo", input)
+	// Give a specific hint when the input looks like a bare repo name.
+	if !strings.Contains(input, "/") && input != "" {
+		return "", "", fmt.Errorf("repo must include the owner: try %q", "owner/"+input)
+	}
+	return "", "", fmt.Errorf("repo must be in owner/repo format (e.g. %q) or a full GitHub URL", "acme/my-site")
 }
 
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -471,6 +497,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("project: created slug=%s repo=%s/%s branch=%s user=%s", slug, owner, name, branch, u.Email)
 	go h.deployAndRegister(p)
 
 	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
@@ -481,11 +508,12 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 // live router so it's immediately reachable.
 func (h *Handlers) deployAndRegister(p *store.Project) {
 	token := h.Store.EffectiveGitHubToken(p.UserID)
+	log.Printf("deploy: cloning slug=%s repo=%s/%s branch=%s", p.Slug, p.RepoOwner, p.RepoName, p.Branch)
 	commit, err := h.Deployer.Clone(p.Slug, p.RepoURL(), p.Branch, token)
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
-		log.Printf("deploy %s: %v", p.Slug, err)
+		log.Printf("deploy: clone failed slug=%s repo=%s/%s error=%v", p.Slug, p.RepoOwner, p.RepoName, err)
 		_ = h.Store.Put(p)
 		return
 	}
@@ -500,6 +528,7 @@ func (h *Handlers) deployAndRegister(p *store.Project) {
 		root = root + "/" + p.Subdir
 	}
 	h.Router.RegisterProject(p.Slug, http.FileServer(http.Dir(root)))
+	log.Printf("deploy: clone ok slug=%s commit=%s serving=%s", p.Slug, commit, root)
 }
 
 func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
@@ -534,10 +563,12 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
+		log.Printf("redeploy: pull failed slug=%s error=%v", slug, err)
 	} else {
 		p.Status = store.StatusLive
 		p.LastCommit = commit
 		p.LastError = ""
+		log.Printf("redeploy: ok slug=%s commit=%s user=%s", slug, commit, u.Email)
 	}
 	_ = h.Store.Put(p)
 
@@ -560,6 +591,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	_ = h.Deployer.Remove(slug)
 	_ = h.Store.DeleteForUser(slug, u.ID)
 
+	log.Printf("project: deleted slug=%s user=%s", slug, u.Email)
 	w.Header().Set("HX-Redirect", "/")
 }
 
@@ -632,6 +664,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("project: updated slug=%s repo=%s/%s branch=%s user=%s", slug, owner, name, branch, u.Email)
 	go h.deployAndRegister(p)
 
 	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
@@ -655,9 +688,11 @@ func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if tok := r.FormValue("github_token"); tok != "" {
 		_ = h.Store.SetUserSetting(u.ID, "github_token", tok)
+		log.Printf("settings: github_token updated user=%s", u.Email)
 	}
 	if sec := r.FormValue("webhook_secret"); sec != "" {
 		_ = h.Store.SetUserSetting(u.ID, "webhook_secret", sec)
+		log.Printf("settings: webhook_secret updated user=%s", u.Email)
 	}
 	tok, _ := h.Store.UserSetting(u.ID, "github_token")
 	sec, _ := h.Store.UserSetting(u.ID, "webhook_secret")
@@ -692,7 +727,16 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload githubWebhookPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
+	payloadBody := body
+	if contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err == nil && contentType == "application/x-www-form-urlencoded" {
+		form, err := url.ParseQuery(string(body))
+		if err != nil {
+			http.Error(w, "invalid json payload", http.StatusBadRequest)
+			return
+		}
+		payloadBody = []byte(form.Get("payload"))
+	}
+	if err := json.Unmarshal(payloadBody, &payload); err != nil {
 		http.Error(w, "invalid json payload", http.StatusBadRequest)
 		return
 	}

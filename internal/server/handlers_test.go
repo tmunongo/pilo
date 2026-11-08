@@ -61,8 +61,8 @@ func TestProjectCreateValidation(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if !strings.Contains(rec.Body.String(), "parse") || !strings.Contains(rec.Body.String(), "owner/repo") {
-		t.Errorf("expected parse error for invalid repo format, got: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "owner/") {
+		t.Errorf("expected repo format error for invalid repo format, got: %s", rec.Body.String())
 	}
 
 	// 2. Reserved slug (e.g. "projects", "settings", "login")
