@@ -119,6 +119,52 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const createWebhookLog = `-- name: CreateWebhookLog :one
+INSERT INTO webhook_logs (
+    id, project_slug, user_id, event, delivery, signature, status, message, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, project_slug, user_id, event, delivery, signature, status, message, created_at
+`
+
+type CreateWebhookLogParams struct {
+	ID          string    `json:"id"`
+	ProjectSlug string    `json:"project_slug"`
+	UserID      string    `json:"user_id"`
+	Event       string    `json:"event"`
+	Delivery    string    `json:"delivery"`
+	Signature   string    `json:"signature"`
+	Status      string    `json:"status"`
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateWebhookLog(ctx context.Context, arg CreateWebhookLogParams) (WebhookLog, error) {
+	row := q.db.QueryRowContext(ctx, createWebhookLog,
+		arg.ID,
+		arg.ProjectSlug,
+		arg.UserID,
+		arg.Event,
+		arg.Delivery,
+		arg.Signature,
+		arg.Status,
+		arg.Message,
+		arg.CreatedAt,
+	)
+	var i WebhookLog
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectSlug,
+		&i.UserID,
+		&i.Event,
+		&i.Delivery,
+		&i.Signature,
+		&i.Status,
+		&i.Message,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
 DELETE FROM sessions WHERE expires_at <= ?
 `
@@ -205,6 +251,54 @@ func (q *Queries) GetActivePasswordResetByTokenHash(ctx context.Context, arg Get
 		&i.UsedAt,
 		&i.CreatedAt,
 		&i.Email,
+	)
+	return i, err
+}
+
+const getLatestWebhookLogForProject = `-- name: GetLatestWebhookLogForProject :one
+SELECT id, project_slug, user_id, event, delivery, signature, status, message, created_at FROM webhook_logs
+WHERE project_slug = ?
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestWebhookLogForProject(ctx context.Context, projectSlug string) (WebhookLog, error) {
+	row := q.db.QueryRowContext(ctx, getLatestWebhookLogForProject, projectSlug)
+	var i WebhookLog
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectSlug,
+		&i.UserID,
+		&i.Event,
+		&i.Delivery,
+		&i.Signature,
+		&i.Status,
+		&i.Message,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLatestWebhookLogForUser = `-- name: GetLatestWebhookLogForUser :one
+SELECT id, project_slug, user_id, event, delivery, signature, status, message, created_at FROM webhook_logs
+WHERE user_id = ?
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestWebhookLogForUser(ctx context.Context, userID string) (WebhookLog, error) {
+	row := q.db.QueryRowContext(ctx, getLatestWebhookLogForUser, userID)
+	var i WebhookLog
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectSlug,
+		&i.UserID,
+		&i.Event,
+		&i.Delivery,
+		&i.Signature,
+		&i.Status,
+		&i.Message,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -500,6 +594,96 @@ func (q *Queries) ListUserSettings(ctx context.Context, userID string) ([]ListUs
 	for rows.Next() {
 		var i ListUserSettingsRow
 		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWebhookLogsByProjectSlug = `-- name: ListWebhookLogsByProjectSlug :many
+SELECT id, project_slug, user_id, event, delivery, signature, status, message, created_at FROM webhook_logs
+WHERE project_slug = ?
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+type ListWebhookLogsByProjectSlugParams struct {
+	ProjectSlug string `json:"project_slug"`
+	Limit       int64  `json:"limit"`
+}
+
+func (q *Queries) ListWebhookLogsByProjectSlug(ctx context.Context, arg ListWebhookLogsByProjectSlugParams) ([]WebhookLog, error) {
+	rows, err := q.db.QueryContext(ctx, listWebhookLogsByProjectSlug, arg.ProjectSlug, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WebhookLog
+	for rows.Next() {
+		var i WebhookLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectSlug,
+			&i.UserID,
+			&i.Event,
+			&i.Delivery,
+			&i.Signature,
+			&i.Status,
+			&i.Message,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWebhookLogsByUserID = `-- name: ListWebhookLogsByUserID :many
+SELECT id, project_slug, user_id, event, delivery, signature, status, message, created_at FROM webhook_logs
+WHERE user_id = ?
+ORDER BY created_at DESC
+LIMIT ?
+`
+
+type ListWebhookLogsByUserIDParams struct {
+	UserID string `json:"user_id"`
+	Limit  int64  `json:"limit"`
+}
+
+func (q *Queries) ListWebhookLogsByUserID(ctx context.Context, arg ListWebhookLogsByUserIDParams) ([]WebhookLog, error) {
+	rows, err := q.db.QueryContext(ctx, listWebhookLogsByUserID, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WebhookLog
+	for rows.Next() {
+		var i WebhookLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectSlug,
+			&i.UserID,
+			&i.Event,
+			&i.Delivery,
+			&i.Signature,
+			&i.Status,
+			&i.Message,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

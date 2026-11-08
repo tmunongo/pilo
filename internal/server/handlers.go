@@ -40,8 +40,9 @@ type Handlers struct {
 	Partials  *template.Template
 	BaseURL   string // used to render the webhook URL on the settings page
 	Port      string
-	SitesPath string
-	Version   string
+	SitesPath       string
+	Version         string
+	SignupsDisabled bool
 }
 
 func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) *Handlers {
@@ -50,14 +51,15 @@ func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) 
 		sitesPath = d.ReposRoot
 	}
 	return &Handlers{
-		Store:     s,
-		Deployer:  d,
-		Router:    r,
-		Mailer:    NewMailerFromEnv(),
-		Pages:     web.Templates(),
-		Partials:  web.PartialsTemplate(),
-		BaseURL:   baseURL,
-		SitesPath: sitesPath,
+		Store:           s,
+		Deployer:        d,
+		Router:          r,
+		Mailer:          NewMailerFromEnv(),
+		Pages:           web.Templates(),
+		Partials:        web.PartialsTemplate(),
+		BaseURL:         baseURL,
+		SitesPath:       sitesPath,
+		SignupsDisabled: true, // disabled for now due to same-origin cookie/localStorage security
 	}
 }
 
@@ -98,12 +100,13 @@ func clearSessionCookie(w http.ResponseWriter) {
 
 func (h *Handlers) commonData(r *http.Request, activeNav string, extra map[string]any) map[string]any {
 	data := map[string]any{
-		"User":       userFromContext(r.Context()),
-		"ActiveNav":  activeNav,
-		"Port":       h.Port,
-		"SitesPath":  h.SitesPath,
-		"Version":    h.Version,
-		"WebhookURL": h.BaseURL + "/webhooks/github",
+		"User":            userFromContext(r.Context()),
+		"ActiveNav":       activeNav,
+		"Port":            h.Port,
+		"SitesPath":       h.SitesPath,
+		"Version":         h.Version,
+		"WebhookURL":      h.BaseURL + "/webhooks/github",
+		"SignupsDisabled": h.SignupsDisabled,
 	}
 	for k, v := range extra {
 		data[k] = v
@@ -233,12 +236,27 @@ func (h *Handlers) SignUpForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+	if h.SignupsDisabled {
+		http.Redirect(w, r, "/login?notice=Signups+are+temporarily+disabled.", http.StatusSeeOther)
+		return
+	}
 	render(w, h.Pages["signup"], h.commonData(r, "", map[string]any{
 		"Form": map[string]string{},
 	}))
 }
 
 func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
+	if h.SignupsDisabled {
+		log.Printf("auth: signup attempt rejected (signups temporarily disabled)")
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("HX-Redirect", "/login?notice=Signups+are+temporarily+disabled.")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/login?notice=Signups+are+temporarily+disabled.", http.StatusSeeOther)
+		return
+	}
+
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -395,9 +413,16 @@ func (h *Handlers) Index(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	var lastWebhookEvent string
+	if u != nil {
+		if latestLog, err := h.Store.LatestWebhookLogForUser(u.ID); err == nil && latestLog != nil {
+			lastWebhookEvent = fmt.Sprintf("%s · %s (%s)", latestLog.ProjectSlug, latestLog.Message, web.Reltime(latestLog.CreatedAt))
+		}
+	}
 	render(w, h.Pages["index"], h.commonData(r, "projects", map[string]any{
-		"Projects":        projects,
-		"BuildingProject": building,
+		"Projects":         projects,
+		"BuildingProject":  building,
+		"LastWebhookEvent": lastWebhookEvent,
 	}))
 }
 
@@ -543,9 +568,16 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 	if h.Deployer != nil {
 		deploys = h.Deployer.Commits(p.Slug, 5)
 	}
+
+	webhookLogs, _ := h.Store.WebhookLogsForProject(p.Slug, 10)
+	hasSecret := h.Store.EffectiveWebhookSecret(u.ID) != ""
+	hasWebhooks := hasSecret || len(webhookLogs) > 0
+
 	render(w, h.Pages["project"], h.commonData(r, "", map[string]any{
-		"Project": p,
-		"Deploys": deploys,
+		"Project":     p,
+		"Deploys":     deploys,
+		"WebhookLogs": webhookLogs,
+		"HasWebhooks": hasWebhooks,
 	}))
 }
 
@@ -709,6 +741,15 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 
 type githubWebhookPayload struct {
 	Ref        string `json:"ref"`
+	After      string `json:"after"`
+	HeadCommit struct {
+		ID      string `json:"id"`
+		Message string `json:"message"`
+		Author  struct {
+			Name     string `json:"name"`
+			Username string `json:"username"`
+		} `json:"author"`
+	} `json:"head_commit"`
 	Repository struct {
 		Name  string `json:"name"`
 		Owner struct {
@@ -717,6 +758,7 @@ type githubWebhookPayload struct {
 		} `json:"owner"`
 		FullName string `json:"full_name"`
 	} `json:"repository"`
+	Zen string `json:"zen"`
 }
 
 func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
@@ -724,6 +766,21 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
 		return
+	}
+
+	event := r.Header.Get("X-GitHub-Event")
+	if event == "" {
+		event = "push"
+	}
+	delivery := r.Header.Get("X-GitHub-Delivery")
+	sig := r.Header.Get("X-Hub-Signature-256")
+
+	secret := h.Store.WebhookSecret
+	if secret != "" {
+		if !verifySignature(secret, body, sig) {
+			http.Error(w, "invalid webhook signature", http.StatusUnauthorized)
+			return
+		}
 	}
 
 	var payload githubWebhookPayload
@@ -741,46 +798,139 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branch := strings.TrimPrefix(payload.Ref, "refs/heads/")
 	owner := payload.Repository.Owner.Login
 	if owner == "" {
 		owner = payload.Repository.Owner.Name
 	}
 	repo := payload.Repository.Name
 
-	if owner == "" || repo == "" || branch == "" {
+	if owner == "" || repo == "" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ignored: missing repository or branch details"))
+		w.Write([]byte("ignored: missing repository details"))
 		return
 	}
 
-	sig := r.Header.Get("X-Hub-Signature-256")
-	secret := h.Store.WebhookSecret
-	if secret != "" {
-		if !verifySignature(secret, body, sig) {
-			http.Error(w, "invalid webhook signature", http.StatusUnauthorized)
-			return
+	if event == "ping" {
+		logged := 0
+		for _, p := range h.Store.All() {
+			if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+				sec := h.Store.EffectiveWebhookSecret(p.UserID)
+				if sec != "" && !verifySignature(sec, body, sig) {
+					_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+						ProjectSlug: p.Slug,
+						UserID:      p.UserID,
+						Event:       "ping",
+						Delivery:    delivery,
+						Signature:   sig,
+						Status:      "error",
+						Message:     "Invalid webhook signature",
+					})
+					continue
+				}
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       "ping",
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "success",
+					Message:     "Webhook ping received from GitHub",
+				})
+				logged++
+			}
 		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "ping acknowledged for %d project(s)", logged)
+		return
 	}
+
+	branch := strings.TrimPrefix(payload.Ref, "refs/heads/")
+	if branch == "" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ignored: missing branch details"))
+		return
+	}
+
 	redeployedCount := 0
 	for _, p := range h.Store.All() {
-		if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) && p.Branch == branch {
-			secret := h.Store.EffectiveWebhookSecret(p.UserID)
-			if secret != "" && !verifySignature(secret, body, sig) {
-				log.Printf("webhook redeploy %s: invalid signature", p.Slug)
+		if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+			if p.Branch != branch {
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       event,
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "ignored",
+					Message:     fmt.Sprintf("Push to %s ignored (tracks %s)", branch, p.Branch),
+				})
 				continue
 			}
-			token := h.Store.EffectiveGitHubToken(p.UserID)
-			commit, err := h.Deployer.Pull(p.Slug, p.Branch, token)
-			if err != nil {
+
+			sec := h.Store.EffectiveWebhookSecret(p.UserID)
+			if sec != "" && !verifySignature(sec, body, sig) {
+				log.Printf("webhook redeploy %s: invalid signature", p.Slug)
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       event,
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "error",
+					Message:     fmt.Sprintf("Invalid signature for branch %q", branch),
+				})
+				continue
+			}
+
+			var commit string
+			var pullErr error
+			if h.Deployer != nil {
+				token := h.Store.EffectiveGitHubToken(p.UserID)
+				commit, pullErr = h.Deployer.Pull(p.Slug, p.Branch, token)
+			} else {
+				pullErr = errors.New("deployer not configured")
+			}
+
+			if pullErr != nil {
 				p.Status = store.StatusError
-				p.LastError = err.Error()
-				log.Printf("webhook redeploy %s error: %v", p.Slug, err)
+				p.LastError = pullErr.Error()
+				log.Printf("webhook redeploy %s error: %v", p.Slug, pullErr)
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       event,
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "error",
+					Message:     fmt.Sprintf("Redeploy error on %s: %v", branch, pullErr),
+				})
 			} else {
 				p.Status = store.StatusLive
 				p.LastCommit = commit
 				p.LastError = ""
 				log.Printf("webhook redeploy %s success: commit %s", p.Slug, commit)
+
+				shortCommit := commit
+				if len(shortCommit) > 7 {
+					shortCommit = shortCommit[:7]
+				}
+				msg := fmt.Sprintf("Deployed %s on %s", shortCommit, branch)
+				if payload.HeadCommit.Message != "" {
+					firstLine := strings.Split(strings.TrimSpace(payload.HeadCommit.Message), "\n")[0]
+					if len(firstLine) > 50 {
+						firstLine = firstLine[:47] + "..."
+					}
+					msg = fmt.Sprintf("Deployed %s (%s)", shortCommit, firstLine)
+				}
+				_ = h.Store.CreateWebhookLog(&store.WebhookLog{
+					ProjectSlug: p.Slug,
+					UserID:      p.UserID,
+					Event:       event,
+					Delivery:    delivery,
+					Signature:   sig,
+					Status:      "success",
+					Message:     msg,
+				})
 			}
 			_ = h.Store.Put(p)
 			redeployedCount++

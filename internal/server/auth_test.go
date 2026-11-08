@@ -30,6 +30,7 @@ func setupTestServer(t *testing.T) (*store.Store, *server.Router, *server.Handle
 	handlers := server.NewHandlers(st, dep, router, "http://localhost:8080")
 	handlers.Port = "8080"
 	handlers.Version = "v0.1.0"
+	handlers.SignupsDisabled = false // enable signups for auth testing
 	router.SetAdmin(handlers.Mux())
 
 	return st, router, handlers
@@ -215,6 +216,72 @@ func TestAuthSignUpAction(t *testing.T) {
 
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
 		t.Errorf("expected authenticated GET /signup to redirect to /")
+	}
+}
+
+func TestSignupsDisabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	router := server.NewRouter(nil)
+	handlers := server.NewHandlers(st, nil, router, "http://localhost:8080")
+	// Verify SignupsDisabled is true by default
+	if !handlers.SignupsDisabled {
+		t.Errorf("expected SignupsDisabled to be true by default")
+	}
+	router.SetAdmin(handlers.Mux())
+
+	// 1. GET /signup should redirect to login with notice
+	req := httptest.NewRequest("GET", "/signup", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect when signups disabled, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Location"), "notice=") {
+		t.Errorf("expected notice in redirect URL, got %s", rec.Header().Get("Location"))
+	}
+
+	// 2. POST /signup should be rejected and redirect to login
+	form := url.Values{
+		"email":            {"someone@example.com"},
+		"password":         {"password123"},
+		"password_confirm": {"password123"},
+	}
+	reqPost := httptest.NewRequest("POST", "/signup", strings.NewReader(form.Encode()))
+	reqPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recPost := httptest.NewRecorder()
+	router.ServeHTTP(recPost, reqPost)
+	if recPost.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect on POST /signup when signups disabled, got %d", recPost.Code)
+	}
+	if !strings.Contains(recPost.Header().Get("Location"), "notice=") {
+		t.Errorf("expected notice in redirect URL, got %s", recPost.Header().Get("Location"))
+	}
+
+	// User should not have been created
+	count, err := st.CountUsers()
+	if err != nil || count != 0 {
+		t.Errorf("expected 0 users created when signups disabled, got count=%d err=%v", count, err)
+	}
+
+	// 3. GET /login should display notice that signups are disabled instead of create account link
+	reqLogin := httptest.NewRequest("GET", "/login", nil)
+	recLogin := httptest.NewRecorder()
+	router.ServeHTTP(recLogin, reqLogin)
+	if recLogin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on GET /login, got %d", recLogin.Code)
+	}
+	if strings.Contains(recLogin.Body.String(), `href="/signup"`) {
+		t.Errorf("login page should not show signup link when signups are disabled")
+	}
+	if !strings.Contains(recLogin.Body.String(), "Signups are temporarily disabled") {
+		t.Errorf("login page should indicate signups are disabled")
 	}
 }
 

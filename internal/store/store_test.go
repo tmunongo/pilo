@@ -317,3 +317,101 @@ func TestAccountScopedProjectsAndSettings(t *testing.T) {
 		t.Errorf("expected user 2 to still have global token, got %s", tok)
 	}
 }
+
+func TestWebhookLogsStore(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test_webhook_logs.db")
+
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	u, err := st.CreateUser("webhooker@example.com", "password123")
+	if err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	p := &store.Project{
+		ID:        "app-webhooks",
+		Slug:      "app-webhooks",
+		UserID:    u.ID,
+		RepoOwner: "octocat",
+		RepoName:  "app-webhooks",
+		Branch:    "main",
+		Status:    store.StatusLive,
+	}
+	if err := st.Put(p); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+
+	// Initially no webhook logs
+	logs, err := st.WebhookLogsForProject(p.Slug, 10)
+	if err != nil {
+		t.Fatalf("failed to query webhook logs: %v", err)
+	}
+	if len(logs) != 0 {
+		t.Fatalf("expected 0 webhook logs, got %d", len(logs))
+	}
+
+	// Insert a log entry
+	log1 := &store.WebhookLog{
+		ProjectSlug: p.Slug,
+		UserID:      u.ID,
+		Event:       "push",
+		Delivery:    "deliv-1234",
+		Signature:   "sha256=abcdef",
+		Status:      "success",
+		Message:     "Deployed c0ffee on main",
+		CreatedAt:   time.Now().Add(-1 * time.Minute),
+	}
+	if err := st.CreateWebhookLog(log1); err != nil {
+		t.Fatalf("failed to create webhook log: %v", err)
+	}
+
+	// Insert another log entry
+	log2 := &store.WebhookLog{
+		ProjectSlug: p.Slug,
+		UserID:      u.ID,
+		Event:       "ping",
+		Delivery:    "deliv-5678",
+		Signature:   "sha256=abcdef",
+		Status:      "success",
+		Message:     "Webhook ping received",
+		CreatedAt:   time.Now(),
+	}
+	if err := st.CreateWebhookLog(log2); err != nil {
+		t.Fatalf("failed to create webhook log: %v", err)
+	}
+
+	// List logs for project (should be in descending order of created_at)
+	logs, err = st.WebhookLogsForProject(p.Slug, 10)
+	if err != nil {
+		t.Fatalf("failed to query webhook logs: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("expected 2 webhook logs, got %d", len(logs))
+	}
+	if logs[0].Event != "ping" || logs[1].Event != "push" {
+		t.Errorf("logs not in expected order: %v, %v", logs[0].Event, logs[1].Event)
+	}
+
+	// Test LatestWebhookLogForUser
+	latestUserLog, err := st.LatestWebhookLogForUser(u.ID)
+	if err != nil {
+		t.Fatalf("failed to get latest user webhook log: %v", err)
+	}
+	if latestUserLog == nil || latestUserLog.Event != "ping" {
+		t.Errorf("expected latest user webhook log to be ping, got %v", latestUserLog)
+	}
+
+	// Test LatestWebhookLogForProject
+	latestProjLog, err := st.LatestWebhookLogForProject(p.Slug)
+	if err != nil {
+		t.Fatalf("failed to get latest project webhook log: %v", err)
+	}
+	if latestProjLog == nil || latestProjLog.Event != "ping" {
+		t.Errorf("expected latest project webhook log to be ping, got %v", latestProjLog)
+	}
+}

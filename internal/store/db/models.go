@@ -58,3 +58,15 @@ type UserSetting struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 }
+
+type WebhookLog struct {
+	ID          string    `json:"id"`
+	ProjectSlug string    `json:"project_slug"`
+	UserID      string    `json:"user_id"`
+	Event       string    `json:"event"`
+	Delivery    string    `json:"delivery"`
+	Signature   string    `json:"signature"`
+	Status      string    `json:"status"`
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}

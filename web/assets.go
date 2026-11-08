@@ -13,6 +13,11 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
+// Reltime formats a time as a human-readable relative string.
+func Reltime(t time.Time) string {
+	return reltime(t)
+}
+
 // reltime formats a time as a human-readable relative string.
 // e.g. "just now", "12 s ago", "4 min ago", "3 days ago", "2 weeks ago".
 func reltime(t time.Time) string {

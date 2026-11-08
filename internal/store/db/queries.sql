@@ -127,3 +127,34 @@ INSERT INTO settings (key, value)
 VALUES (?, ?)
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 
+-- name: CreateWebhookLog :one
+INSERT INTO webhook_logs (
+    id, project_slug, user_id, event, delivery, signature, status, message, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: ListWebhookLogsByProjectSlug :many
+SELECT * FROM webhook_logs
+WHERE project_slug = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- name: ListWebhookLogsByUserID :many
+SELECT * FROM webhook_logs
+WHERE user_id = ?
+ORDER BY created_at DESC
+LIMIT ?;
+
+-- name: GetLatestWebhookLogForUser :one
+SELECT * FROM webhook_logs
+WHERE user_id = ?
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: GetLatestWebhookLogForProject :one
+SELECT * FROM webhook_logs
+WHERE project_slug = ?
+ORDER BY created_at DESC
+LIMIT 1;
+
+

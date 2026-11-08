@@ -50,7 +50,11 @@
       </div>
 
       <p class="section-prose" style="margin-top:32px; font-size:15px; border-top:1px solid var(--hairline); padding-top:20px;">
+        {{if .SignupsDisabled}}
+        Don't have an account? <span style="color:var(--muted);">Signups are temporarily disabled.</span>
+        {{else}}
         Don't have an account? <a href="/signup" class="btn-text" style="font-size:15px; font-family:'Hanken Grotesk',sans-serif;">Create an account</a>.
+        {{end}}
       </p>
     </form>
 

@@ -109,6 +109,88 @@
     </div>
     {{end}}
 
+    <!-- Webhook logs -->
+    {{if .HasWebhooks}}
+    <div class="section-gap">
+      <h2 class="section-heading">webhook logs</h2>
+      {{if .WebhookLogs}}
+      <div class="table-scroll" style="margin-top:16px;">
+        <table class="webhook-logs-table" aria-label="Webhook delivery logs">
+          <thead>
+            <tr>
+              <th scope="col">event</th>
+              <th scope="col">status</th>
+              <th scope="col">details</th>
+              <th scope="col">when</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .WebhookLogs}}
+            <tr>
+              <td><code>{{.Event}}</code></td>
+              <td>
+                {{if eq .Status "success"}}
+                  <span class="lamp-mark lamp-mark--solid" aria-hidden="true" style="margin-right:6px;display:inline-block;"></span>ok
+                {{else if eq .Status "error"}}
+                  <span class="status-failed" style="margin-right:6px;">×</span>failed
+                {{else}}
+                  <span class="lamp-mark lamp-mark--idle" aria-hidden="true" style="margin-right:6px;display:inline-block;"></span>{{.Status}}
+                {{end}}
+              </td>
+              <td title="{{.Message}}">{{.Message}}</td>
+              <td>{{reltime .CreatedAt}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <div class="log-block" style="margin-top:16px;" role="log" aria-label="Webhook log">no webhook deliveries received yet for this project</div>
+      {{end}}
+    </div>
+    {{end}}
+
+    <!-- Webhook logs -->
+    {{if .HasWebhooks}}
+    <div class="section-gap">
+      <h2 class="section-heading">webhook logs</h2>
+      {{if .WebhookLogs}}
+      <div class="table-scroll" style="margin-top:16px;">
+        <table class="webhook-logs-table" aria-label="Webhook delivery logs">
+          <thead>
+            <tr>
+              <th scope="col">event</th>
+              <th scope="col">status</th>
+              <th scope="col">details</th>
+              <th scope="col">when</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .WebhookLogs}}
+            <tr>
+              <td><code>{{.Event}}</code></td>
+              <td>
+                {{if eq .Status "success"}}
+                  <span class="lamp-mark lamp-mark--solid" aria-hidden="true" style="margin-right:6px;display:inline-block;"></span>ok
+                {{else if eq .Status "error"}}
+                  <span class="status-failed" style="margin-right:6px;">×</span>failed
+                {{else}}
+                  <span class="lamp-mark lamp-mark--idle" aria-hidden="true" style="margin-right:6px;display:inline-block;"></span>{{.Status}}
+                {{end}}
+              </td>
+              <td title="{{.Message}}">{{.Message}}</td>
+              <td>{{reltime .CreatedAt}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}
+      <div class="log-block" style="margin-top:16px;" role="log" aria-label="Webhook log">no webhook deliveries received yet for this project</div>
+      {{end}}
+    </div>
+    {{end}}
+
   </div>
 </main>
 {{end}}

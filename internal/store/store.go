@@ -80,6 +80,19 @@ func (p *Project) RepoURL() string {
 	return fmt.Sprintf("https://github.com/%s/%s.git", p.RepoOwner, p.RepoName)
 }
 
+// WebhookLog represents an incoming webhook event delivery log for a deployment.
+type WebhookLog struct {
+	ID          string    `json:"id"`
+	ProjectSlug string    `json:"project_slug"`
+	UserID      string    `json:"user_id"`
+	Event       string    `json:"event"`
+	Delivery    string    `json:"delivery"`
+	Signature   string    `json:"signature"`
+	Status      string    `json:"status"` // "success", "error", "ignored"
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // Store holds the SQLite database connection, sqlc queries, and cached settings.
 // Safe for concurrent use.
 type Store struct {
@@ -678,5 +691,91 @@ func toProjectModel(r db.Project) *Project {
 		LastError:  r.LastError,
 		CreatedAt:  r.CreatedAt,
 		UpdatedAt:  r.UpdatedAt,
+	}
+}
+
+// --- webhook logs queries ------------------------------------------------
+
+// CreateWebhookLog persists a new webhook log entry.
+func (s *Store) CreateWebhookLog(l *WebhookLog) error {
+	ctx := context.Background()
+	if l.ID == "" {
+		l.ID = uuid.NewString()
+	}
+	if l.CreatedAt.IsZero() {
+		l.CreatedAt = time.Now().UTC()
+	}
+	_, err := s.queries.CreateWebhookLog(ctx, db.CreateWebhookLogParams{
+		ID:          l.ID,
+		ProjectSlug: l.ProjectSlug,
+		UserID:      l.UserID,
+		Event:       l.Event,
+		Delivery:    l.Delivery,
+		Signature:   l.Signature,
+		Status:      l.Status,
+		Message:     l.Message,
+		CreatedAt:   l.CreatedAt.UTC(),
+	})
+	return err
+}
+
+// WebhookLogsForProject returns the recent webhook logs for a specific project.
+func (s *Store) WebhookLogsForProject(projectSlug string, limit int) ([]*WebhookLog, error) {
+	ctx := context.Background()
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := s.queries.ListWebhookLogsByProjectSlug(ctx, db.ListWebhookLogsByProjectSlugParams{
+		ProjectSlug: projectSlug,
+		Limit:       int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var out []*WebhookLog
+	for _, r := range rows {
+		out = append(out, toWebhookLogModel(r))
+	}
+	return out, nil
+}
+
+// LatestWebhookLogForUser returns the most recent webhook log for any project belonging to a user.
+func (s *Store) LatestWebhookLogForUser(userID string) (*WebhookLog, error) {
+	ctx := context.Background()
+	r, err := s.queries.GetLatestWebhookLogForUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return toWebhookLogModel(r), nil
+}
+
+// LatestWebhookLogForProject returns the most recent webhook log for a project.
+func (s *Store) LatestWebhookLogForProject(projectSlug string) (*WebhookLog, error) {
+	ctx := context.Background()
+	r, err := s.queries.GetLatestWebhookLogForProject(ctx, projectSlug)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return toWebhookLogModel(r), nil
+}
+
+func toWebhookLogModel(r db.WebhookLog) *WebhookLog {
+	return &WebhookLog{
+		ID:          r.ID,
+		ProjectSlug: r.ProjectSlug,
+		UserID:      r.UserID,
+		Event:       r.Event,
+		Delivery:    r.Delivery,
+		Signature:   r.Signature,
+		Status:      r.Status,
+		Message:     r.Message,
+		CreatedAt:   r.CreatedAt,
 	}
 }

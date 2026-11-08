@@ -322,6 +322,27 @@
       text-overflow: ellipsis;
     }
 
+    /* Webhook logs table */
+    .webhook-logs-table {
+      min-width: 580px;
+      width: 100%;
+    }
+
+    .webhook-logs-table thead tr,
+    .webhook-logs-table tbody tr {
+      display: grid;
+      grid-template-columns: 70px 80px 1fr 110px;
+      column-gap: 16px;
+      align-items: center;
+    }
+
+    .webhook-logs-table th,
+    .webhook-logs-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     /* ── Status cell ──────────────────────────────────────────────────── */
     .status-cell {
       display: flex;
@@ -649,7 +670,9 @@
         </form>
         {{else}}
         <a href="/login" class="nav-link{{if eq .ActiveNav "login"}} nav-link--active{{end}}">sign in</a>
+        {{if not .SignupsDisabled}}
         <a href="/signup" class="btn-primary">sign up</a>
+        {{end}}
         {{end}}
       </nav>
     </div>

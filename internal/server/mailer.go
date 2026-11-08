@@ -72,4 +72,3 @@ func (m *Mailer) SendPasswordReset(toEmail, resetURL string) error {
 
 	return nil
 }
-

@@ -39,6 +39,7 @@ func main() {
 	handlers := server.NewHandlers(st, dep, router, baseURL)
 	handlers.Port = port
 	handlers.Version = getenv("PILO_VERSION", "v0.1.0")
+	handlers.SignupsDisabled = getenv("PILO_DISABLE_SIGNUPS", "true") == "true"
 
 	adminMux := handlers.Mux()
 	router.SetAdmin(adminMux)

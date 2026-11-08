@@ -29,6 +29,7 @@ func TestPagesRender(t *testing.T) {
 	handlers := server.NewHandlers(st, dep, router, "http://localhost:8080")
 	handlers.Port = "8080"
 	handlers.Version = "v0.1.0"
+	handlers.SignupsDisabled = false // enable signups for full journey testing
 	router.SetAdmin(handlers.Mux())
 
 	// 1. Unauthenticated access to index should redirect to /login
@@ -138,27 +139,27 @@ func TestPagesRender(t *testing.T) {
 		CreatedAt:  time.Now().Add(-24 * time.Hour),
 	}
 	p3 := &store.Project{
-		ID:         "building-app",
-		Slug:       "building-app",
-		UserID:     user.ID,
-		RepoOwner:  "user",
-		RepoName:   "building-app",
-		Branch:     "main",
-		Status:     store.StatusCloning,
-		UpdatedAt:  time.Now(),
-		CreatedAt:  time.Now(),
+		ID:        "building-app",
+		Slug:      "building-app",
+		UserID:    user.ID,
+		RepoOwner: "user",
+		RepoName:  "building-app",
+		Branch:    "main",
+		Status:    store.StatusCloning,
+		UpdatedAt: time.Now(),
+		CreatedAt: time.Now(),
 	}
 	p4 := &store.Project{
-		ID:         "failed-app",
-		Slug:       "failed-app",
-		UserID:     user.ID,
-		RepoOwner:  "user",
-		RepoName:   "failed-app",
-		Branch:     "main",
-		Status:     store.StatusError,
-		LastError:  "git clone authentication failed",
-		UpdatedAt:  time.Now().Add(-10 * time.Minute),
-		CreatedAt:  time.Now(),
+		ID:        "failed-app",
+		Slug:      "failed-app",
+		UserID:    user.ID,
+		RepoOwner: "user",
+		RepoName:  "failed-app",
+		Branch:    "main",
+		Status:    store.StatusError,
+		LastError: "git clone authentication failed",
+		UpdatedAt: time.Now().Add(-10 * time.Minute),
+		CreatedAt: time.Now(),
 	}
 	// And a project owned by a different user
 	otherUser, _ := st.CreateUser("other@example.com", "othersecret")

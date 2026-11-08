@@ -118,4 +118,3 @@ func ensureProjectsUserIDColumn(ctx context.Context, tx *sql.Tx) error {
 	_, err = tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)`)
 	return err
 }
-
