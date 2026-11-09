@@ -43,7 +43,7 @@ func (d *Deployer) Clone(slug, repoURL, branch, token string) (commit string, er
 	if err := os.RemoveAll(dest); err != nil {
 		return "", fmt.Errorf("clearing existing checkout: %w", err)
 	}
-	if err := os.MkdirAll(d.ReposRoot, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return "", fmt.Errorf("creating repos root: %w", err)
 	}
 

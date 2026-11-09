@@ -50,6 +50,9 @@ func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) 
 	if d != nil {
 		sitesPath = d.ReposRoot
 	}
+	if r != nil {
+		r.SetNamespaceResolver(s.UserIDForNamespace)
+	}
 	return &Handlers{
 		Store:     s,
 		Deployer:  d,
@@ -283,7 +286,7 @@ func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
 	fail := func(msg string) {
 		render(w, h.Pages["signup"], h.commonData(r, "", map[string]any{
 			"Error": msg,
-			"Form":  map[string]string{"email": email},
+			"Form":  map[string]string{"email": email, "username": r.FormValue("username")},
 		}))
 	}
 
@@ -296,7 +299,7 @@ func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.Store.CreateUser(email, password)
+	u, err := h.Store.CreateUser(email, password, r.FormValue("username"))
 	if err != nil {
 		if errors.Is(err, store.ErrEmailTaken) {
 			log.Printf("auth: signup failed for %s: email already taken", email)
@@ -511,7 +514,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		fail(fmt.Sprintf("%q is reserved and can't be used as a project slug", slug))
 		return
 	}
-	if h.Store.Get(slug) != nil {
+	if h.Store.GetForUser(slug, u.ID) != nil {
 		fail(fmt.Sprintf("a project with slug %q already exists", slug))
 		return
 	}
@@ -522,7 +525,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &store.Project{
-		ID:        slug,
+		Namespace: h.Store.Namespace(u.ID),
 		Slug:      slug,
 		UserID:    u.ID,
 		RepoOwner: owner,
@@ -549,7 +552,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) deployAndRegister(p *store.Project) {
 	token := h.Store.EffectiveGitHubToken(p.UserID)
 	log.Printf("deploy: cloning slug=%s repo=%s/%s branch=%s", p.Slug, p.RepoOwner, p.RepoName, p.Branch)
-	commit, err := h.Deployer.Clone(p.Slug, p.RepoURL(), p.Branch, token)
+	commit, err := h.Deployer.Clone(p.CheckoutKey(), p.RepoURL(), p.Branch, token)
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
@@ -563,11 +566,11 @@ func (h *Handlers) deployAndRegister(p *store.Project) {
 	p.LastError = ""
 	_ = h.Store.Put(p)
 
-	root := h.Deployer.PathFor(p.Slug)
+	root := h.Deployer.PathFor(p.CheckoutKey())
 	if p.Subdir != "" {
 		root = root + "/" + p.Subdir
 	}
-	h.Router.RegisterProject(p.Slug, http.FileServer(http.Dir(root)))
+	h.Router.RegisterProject(p.CheckoutKey(), http.FileServer(http.Dir(root)))
 	log.Printf("deploy: clone ok slug=%s commit=%s serving=%s", p.Slug, commit, root)
 }
 
@@ -581,7 +584,7 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	var deploys []deploy.CommitInfo
 	if h.Deployer != nil {
-		deploys = h.Deployer.Commits(p.Slug, 5)
+		deploys = h.Deployer.Commits(p.CheckoutKey(), 5)
 	}
 
 	webhookLogs, err := h.Store.WebhookLogsForProjectAndUser(p.Slug, u.ID, 10)
@@ -610,7 +613,7 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := h.Store.EffectiveGitHubToken(u.ID)
-	commit, err := h.Deployer.Pull(slug, p.Branch, token)
+	commit, err := h.Deployer.Pull(p.CheckoutKey(), p.Branch, token)
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
@@ -634,12 +637,13 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	u := userFromContext(r.Context())
-	if h.Store.GetForUser(slug, u.ID) == nil {
+	p := h.Store.GetForUser(slug, u.ID)
+	if p == nil {
 		http.NotFound(w, r)
 		return
 	}
-	h.Router.UnregisterProject(slug)
-	_ = h.Deployer.Remove(slug)
+	h.Router.UnregisterProject(p.CheckoutKey())
+	_ = h.Deployer.Remove(p.CheckoutKey())
 	_ = h.Store.DeleteForUser(slug, u.ID)
 
 	log.Printf("project: deleted slug=%s user=%s", slug, u.Email)
@@ -726,6 +730,8 @@ func (h *Handlers) SettingsForm(w http.ResponseWriter, r *http.Request) {
 	tok, _ := h.Store.UserSetting(u.ID, "github_token")
 	sec, _ := h.Store.UserSetting(u.ID, "webhook_secret")
 	render(w, h.Pages["settings"], h.commonData(r, "settings", map[string]any{
+		"Username":  u.Username,
+		"Namespace": h.Store.Namespace(u.ID),
 		"HasToken":  tok != "",
 		"HasSecret": sec != "",
 	}))
@@ -736,6 +742,17 @@ func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if r.Form.Has("username") {
+		if err := h.Store.SetUsername(u.ID, r.FormValue("username")); err != nil {
+			tok, _ := h.Store.UserSetting(u.ID, "github_token")
+			sec, _ := h.Store.UserSetting(u.ID, "webhook_secret")
+			render(w, h.Pages["settings"], h.commonData(r, "settings", map[string]any{
+				"Error": err.Error(), "Username": r.FormValue("username"), "Namespace": h.Store.Namespace(u.ID), "HasToken": tok != "", "HasSecret": sec != "",
+			}))
+			return
+		}
+		u.Username = strings.ToLower(strings.TrimSpace(r.FormValue("username")))
 	}
 	if tok := r.FormValue("github_token"); tok != "" {
 		_ = h.Store.SetUserSetting(u.ID, "github_token", tok)
@@ -749,6 +766,8 @@ func (h *Handlers) SettingsSave(w http.ResponseWriter, r *http.Request) {
 	sec, _ := h.Store.UserSetting(u.ID, "webhook_secret")
 	render(w, h.Pages["settings"], h.commonData(r, "settings", map[string]any{
 		"Saved":     true,
+		"Username":  u.Username,
+		"Namespace": h.Store.Namespace(u.ID),
 		"HasToken":  tok != "",
 		"HasSecret": sec != "",
 	}))
@@ -907,7 +926,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 			var pullErr error
 			if h.Deployer != nil {
 				token := h.Store.EffectiveGitHubToken(p.UserID)
-				commit, pullErr = h.Deployer.Pull(p.Slug, p.Branch, token)
+				commit, pullErr = h.Deployer.Pull(p.CheckoutKey(), p.Branch, token)
 			} else {
 				pullErr = errors.New("deployer not configured")
 			}

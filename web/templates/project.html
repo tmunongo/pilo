@@ -32,7 +32,7 @@
         class="btn-primary"
         hx-post="/projects/{{.Project.Slug}}/redeploy">redeploy</button>
       <a href="/projects/{{.Project.Slug}}/edit" class="btn-text">edit</a>
-      <a href="/{{.Project.Slug}}/" target="_blank" class="btn-text">open site</a>
+      <a href="{{.Project.PublicPath}}" target="_blank" class="btn-text">open site</a>
       <button
         class="btn-text btn-text--muted"
         hx-delete="/projects/{{.Project.Slug}}"
@@ -52,7 +52,7 @@
         <dd>{{.Project.Subdir}}</dd>
         {{end}}
         <dt>served from</dt>
-        <dd>/{{.Project.Slug}}/</dd>
+        <dd>{{.Project.PublicPath}}</dd>
         {{if .WebhookURL}}
         <dt>webhook</dt>
         <dd>
@@ -78,7 +78,7 @@
       {{else}}
       <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     fetch {{.Project.Branch}}{{if .Project.LastCommit}} ({{slice .Project.LastCommit 0 7}}){{end}}
 {{.Project.UpdatedAt.Format "15:04:05"}}  deploy  ok
-{{.Project.UpdatedAt.Format "15:04:05"}}  router  serving at /{{.Project.Slug}}/</div>
+{{.Project.UpdatedAt.Format "15:04:05"}}  router  serving at {{.Project.PublicPath}}</div>
       {{end}}
     </div>
 

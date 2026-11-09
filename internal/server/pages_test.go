@@ -282,7 +282,7 @@ func TestPagesRender(t *testing.T) {
 		t.Fatalf("settings page returned status %d", rec.Code)
 	}
 	body = rec.Body.String()
-	if !strings.Contains(body, "GitHub credentials and webhook configuration.") {
+	if !strings.Contains(body, "Your public username, GitHub credentials, and webhook configuration.") {
 		t.Errorf("expected settings page lead")
 	}
 	if !strings.Contains(body, "nav-link--active") {

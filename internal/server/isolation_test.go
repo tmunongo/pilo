@@ -105,45 +105,50 @@ func TestCrossTenantProjectIsolation(t *testing.T) {
 }
 
 func TestProjectSlugCollisionAcrossUsers(t *testing.T) {
-	st, router, _ := setupTestServer(t)
-
+	st, router, h := setupTestServer(t)
 	u1, _ := st.CreateUser("user1@example.com", "password123")
 	u2, _ := st.CreateUser("user2@example.com", "password123")
-	s2, _ := st.CreateSession(u2.ID, 1*time.Hour)
-	cookie2 := &http.Cookie{Name: "pilo_session", Value: s2.ID}
-
-	// User 1 already owns "popular-tool"
-	p1 := &store.Project{
-		ID:        "popular-tool",
-		Slug:      "popular-tool",
-		UserID:    u1.ID,
-		RepoOwner: "user1",
-		RepoName:  "popular-tool",
-		Status:    store.StatusLive,
+	sess, _ := st.CreateSession(u2.ID, time.Hour)
+	p1 := &store.Project{Slug: "popular-tool", UserID: u1.ID, Status: store.StatusLive}
+	if err := st.Put(p1); err != nil {
+		t.Fatal(err)
 	}
-	_ = st.Put(p1)
-
-	// User 2 attempts to claim the same slug "popular-tool"
-	form := url.Values{
-		"repo":   {"user2/popular-tool"},
-		"slug":   {"popular-tool"},
-		"branch": {"main"},
+	// Make cloning fail locally, without contacting GitHub.
+	if err := os.WriteFile(h.Deployer.ReposRoot, []byte("blocked"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	req := httptest.NewRequest("POST", "/projects", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie2)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	// Should reject creation with error notice
-	if !strings.Contains(rec.Body.String(), "popular-tool") || !strings.Contains(rec.Body.String(), "already exists") {
-		t.Errorf("expected slug conflict error in HTML response, got: %s", rec.Body.String())
+	form := url.Values{"repo": {"user2/popular-tool"}, "slug": {"popular-tool"}}
+	request := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/projects", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: "pilo_session", Value: sess.ID})
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
 	}
-
-	// Ensure User 1 still owns the project
-	existing := st.Get("popular-tool")
-	if existing == nil || existing.UserID != u1.ID {
-		t.Fatalf("existing project owner was altered during conflict")
+	if rec := request(); rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected creation, got %d: %s", rec.Code, rec.Body.String())
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		p := st.GetForUser("popular-tool", u2.ID)
+		if p != nil && p.Status == store.StatusError {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("deploy did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	p2 := st.GetForUser("popular-tool", u2.ID)
+	if p2.ID == p1.ID || p2.CheckoutKey() == p1.CheckoutKey() {
+		t.Fatal("project identities collided")
+	}
+	if p := st.GetForUser("popular-tool", u1.ID); p == nil || p.Status != store.StatusLive {
+		t.Fatal("other owner's project changed")
+	}
+	if rec := request(); !strings.Contains(rec.Body.String(), "already exists") {
+		t.Fatal("same-owner duplicate accepted")
 	}
 }
 
@@ -165,7 +170,8 @@ func TestHTMXUnauthorizedHandling(t *testing.T) {
 }
 
 func TestPublicStaticRouteServing(t *testing.T) {
-	_, router, _ := setupTestServer(t)
+	st, router, _ := setupTestServer(t)
+	u, _ := st.CreateUser("public@example.com", "password123", "public-user")
 
 	// Create a dummy static site folder
 	siteDir := t.TempDir()
@@ -175,10 +181,10 @@ func TestPublicStaticRouteServing(t *testing.T) {
 	}
 
 	// Register static project route
-	router.RegisterProject("my-public-app", http.FileServer(http.Dir(siteDir)))
+	router.RegisterProject(u.ID+"/my-public-app", http.FileServer(http.Dir(siteDir)))
 
 	// Make an unauthenticated request to the static site
-	req := httptest.NewRequest("GET", "/my-public-app/", nil)
+	req := httptest.NewRequest("GET", "/projects/public-user/my-public-app/", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -190,8 +196,8 @@ func TestPublicStaticRouteServing(t *testing.T) {
 	}
 
 	// Unregister project and verify it returns to admin 404 (or login redirect)
-	router.UnregisterProject("my-public-app")
-	req2 := httptest.NewRequest("GET", "/my-public-app/", nil)
+	router.UnregisterProject(u.ID + "/my-public-app")
+	req2 := httptest.NewRequest("GET", "/projects/public-user/my-public-app/", nil)
 	rec2 := httptest.NewRecorder()
 	router.ServeHTTP(rec2, req2)
 	// Without route, admin mux receives it and unauthenticated access redirects to /login
@@ -243,5 +249,106 @@ func TestUserSettingsIsolation(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if strings.Contains(rec.Body.String(), "currently set") {
 		t.Errorf("user 2 settings page should not reflect user 1's personal token")
+	}
+}
+
+func TestScopedSitesAndUsernameChanges(t *testing.T) {
+	st, router, h := setupTestServer(t)
+	u1, _ := st.CreateUser("scoped-one@example.com", "password123", "first")
+	u2, _ := st.CreateUser("scoped-two@example.com", "password123")
+	projects := []*store.Project{
+		{Slug: "app", UserID: u1.ID, Status: store.StatusLive},
+		{Slug: "app", UserID: u2.ID, Status: store.StatusLive},
+	}
+	for i, p := range projects {
+		if err := st.Put(p); err != nil {
+			t.Fatal(err)
+		}
+		root := h.Deployer.PathFor(p.CheckoutKey())
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "index.html"), []byte([]string{"first content", "second content"}[i]), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		router.RegisterProject(p.CheckoutKey(), http.FileServer(http.Dir(root)))
+	}
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+	if r := get("/projects/first/app/"); r.Code != 200 || r.Body.String() != "first content" {
+		t.Fatalf("wrong first site: %d %s", r.Code, r.Body.String())
+	}
+	if r := get("/projects/" + u2.ID + "/app/"); r.Code != 200 || r.Body.String() != "second content" {
+		t.Fatalf("wrong second site: %d %s", r.Code, r.Body.String())
+	}
+	if r := get("/projects/first/app?x=1"); r.Code != http.StatusMovedPermanently || r.Header().Get("Location") != "/projects/first/app/?x=1" {
+		t.Fatal("missing trailing-slash redirect")
+	}
+	sess, _ := st.CreateSession(u1.ID, time.Hour)
+	postSettings := func(name string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/settings", strings.NewReader(url.Values{"username": {name}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: "pilo_session", Value: sess.ID})
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
+	}
+	if r := postSettings("renamed"); !strings.Contains(r.Body.String(), "Settings saved") {
+		t.Fatal("settings update failed")
+	}
+	if r := get("/projects/renamed/app/"); r.Code != 200 || r.Body.String() != "first content" {
+		t.Fatal("renamed route not live")
+	}
+	if r := get("/projects/first/app/"); r.Code == 200 {
+		t.Fatal("old username still resolves")
+	}
+	if err := st.SetUsername(u2.ID, "occupied"); err != nil {
+		t.Fatal(err)
+	}
+	if r := postSettings("occupied"); !strings.Contains(r.Body.String(), "username is already taken") {
+		t.Fatal("settings conflict not shown")
+	}
+	if st.Namespace(u1.ID) != "renamed" {
+		t.Fatal("conflict changed username")
+	}
+	if err := st.SetUsername(u2.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if r := postSettings(""); !strings.Contains(r.Body.String(), "Settings saved") {
+		t.Fatal("clearing username failed")
+	}
+	if r := get("/projects/" + u1.ID + "/app/"); r.Code != 200 {
+		t.Fatal("UUID route not restored")
+	}
+	req := httptest.NewRequest("DELETE", "/projects/app", nil)
+	req.AddCookie(&http.Cookie{Name: "pilo_session", Value: sess.ID})
+	router.ServeHTTP(httptest.NewRecorder(), req)
+	if _, err := os.Stat(h.Deployer.PathFor(projects[0].CheckoutKey())); !os.IsNotExist(err) {
+		t.Fatal("deleted checkout remains")
+	}
+	if r := get("/projects/" + u2.ID + "/app/"); r.Code != 200 || r.Body.String() != "second content" {
+		t.Fatal("delete affected other user's site")
+	}
+}
+
+func TestSignupUsernameConflict(t *testing.T) {
+	st, router, _ := setupTestServer(t)
+	_, err := st.CreateUser("taken@example.com", "password123", "taken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{"email": {"new@example.com"}, "password": {"password123"}, "password_confirm": {"password123"}, "username": {"TAKEN"}}
+	req := httptest.NewRequest("POST", "/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "username is already taken") {
+		t.Fatal("signup did not show conflict")
+	}
+	if _, err := st.GetUserByEmail("new@example.com"); err == nil {
+		t.Fatal("conflict left a partial account")
 	}
 }

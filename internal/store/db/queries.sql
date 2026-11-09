@@ -28,6 +28,7 @@ SELECT sessions.id AS session_id,
        sessions.expires_at,
        sessions.created_at AS session_created_at,
        users.email,
+       users.username,
        users.created_at AS user_created_at,
        users.updated_at AS user_updated_at
 FROM sessions
@@ -164,3 +165,6 @@ ORDER BY created_at DESC
 LIMIT 1;
 
 
+
+-- name: UpdateUsername :exec
+UPDATE users SET username = ?, updated_at = ? WHERE id = ?;

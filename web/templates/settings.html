@@ -5,14 +5,24 @@
   <div class="shell">
 
     <h1 class="page-title">Settings</h1>
-    <p class="page-lead" style="margin-top:16px;">GitHub credentials and webhook configuration.</p>
+    <p class="page-lead" style="margin-top:16px;">Your public username, GitHub credentials, and webhook configuration.</p>
 
+    {{if .Error}}<div class="notice notice--error" style="margin-top:24px;">{{.Error}}</div>{{end}}
     {{if .Saved}}
     <div class="notice" style="margin-top:32px;">Settings saved.</div>
     {{end}}
 
     <form method="post" action="/settings">
 
+      <div class="kv-section section-gap">
+        <h2 class="section-heading">Username</h2>
+        <p class="section-prose">Sites use /projects/{{.Namespace}}/&lt;project-slug&gt;/. Changing your username changes all your site URLs. Leave blank to use your account UUID.</p>
+        <div class="form-group">
+          <label for="username">username (optional)</label>
+          <input id="username" name="username" class="form-input" value="{{.Username}}" maxlength="32" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" autocomplete="username" spellcheck="false">
+          <p class="section-prose">1–32 lowercase letters, numbers, or hyphens; start and end with a letter or number. Must be unique.</p>
+        </div>
+      </div>
       <!-- GitHub PAT -->
       <div class="kv-section section-gap">
         <h2 class="section-heading" style="padding-block:14px 0;">GitHub personal access token</h2>

@@ -1,11 +1,12 @@
 // Pilo is a tiny, self-hosted PaaS for deploying static (HTML/CSS/JS)
 // tools straight from GitHub repos onto a local path, e.g.
-// http://pilo.local:8080/my-tool/. Single binary, SQLite storage,
+// http://pilo.local:8080/projects/my-username/my-tool/. Single binary, SQLite storage,
 // pure-Go — built to run comfortably on a Raspberry Pi.
 package main
 
 import (
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,8 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
+	migrateOnly := flag.Bool("migrate-projects", false, "migrate legacy checkouts and exit (stop the server first)")
+	flag.Parse()
 	dataDir := getenv("PILO_DATA_DIR", "./data")
 	port := getenv("PILO_PORT", "8080")
 	baseURL := getenv("PILO_BASE_URL", "http://localhost:"+port)
@@ -52,6 +55,14 @@ func main() {
 
 	dep := deploy.New(filepath.Join(dataDir, "repos"))
 
+	if err := dep.MigrateProjects(st.All()); err != nil {
+		log.Fatalf("migrating project checkouts: %v", err)
+	}
+	if *migrateOnly {
+		log.Print("project migration complete")
+		return
+	}
+
 	router := server.NewRouter(nil) // admin handler wired in below
 	handlers := server.NewHandlers(st, dep, router, baseURL)
 	handlers.Port = port
@@ -74,12 +85,12 @@ func main() {
 	// Re-register routes for every project already known to the store,
 	// so a restart doesn't take existing tools offline.
 	for _, p := range st.All() {
-		root := dep.PathFor(p.Slug)
+		root := dep.PathFor(p.CheckoutKey())
 		if p.Subdir != "" {
 			root = root + "/" + p.Subdir
 		}
-		router.RegisterProject(p.Slug, http.FileServer(http.Dir(root)))
-		log.Printf("registered existing project: /%s/ -> %s", p.Slug, root)
+		router.RegisterProject(p.CheckoutKey(), http.FileServer(http.Dir(root)))
+		log.Printf("registered existing project: %s -> %s", p.PublicPath(), root)
 	}
 
 	addr := ":" + port

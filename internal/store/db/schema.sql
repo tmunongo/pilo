@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
     id            TEXT PRIMARY KEY,
+    username      TEXT NOT NULL DEFAULT '' COLLATE NOCASE,
     email         TEXT UNIQUE NOT NULL COLLATE NOCASE,
     password_hash TEXT NOT NULL,
     created_at    DATETIME NOT NULL,
@@ -30,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(tok
 
 CREATE TABLE IF NOT EXISTS projects (
     id          TEXT PRIMARY KEY,
-    slug        TEXT UNIQUE NOT NULL,
+    slug        TEXT NOT NULL,
     user_id     TEXT NOT NULL DEFAULT '',
     repo_owner  TEXT NOT NULL DEFAULT '',
     repo_name   TEXT NOT NULL DEFAULT '',
@@ -42,6 +43,9 @@ CREATE TABLE IF NOT EXISTS projects (
     created_at  DATETIME NOT NULL,
     updated_at  DATETIME NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_owner_slug ON projects(user_id, slug);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username != '';
 
 CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 

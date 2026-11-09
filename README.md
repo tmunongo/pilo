@@ -26,21 +26,9 @@
 
 Pilo turns any machine (VPS, home server, or Raspberry Pi) into a micro-PaaS. It listens for incoming HTTP requests, dynamic routes requests to cloned GitHub repositories on disk, and supports automated deployment via GitHub webhooks.
 
-```
-                  ┌────────────────────────────────────────┐
-                  │              GitHub Repo               │
-                  └──────────────────┬─────────────────────┘
-                                     │
-                             (Push / Webhook)
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              Pilo Server                                │
-├─────────────────────────┬───────────────────────┬───────────────────────┤
-│    Admin UI (/)         │   /app-one/*          │   /app-two/*          │
-├─────────────────────────┼───────────────────────┼───────────────────────┤
-│  Manage Apps & Webhooks │  /data/repos/app-one  │  /data/repos/app-two  │
-└─────────────────────────┴───────────────────────┴───────────────────────┘
+```text
+GitHub push → Pilo webhook → repos/<user UUID>/<project slug>
+                           → /projects/<username or user UUID>/<project slug>/
 ```
 
 ---
@@ -242,3 +230,16 @@ Deploy to your production server:
 | `make patch` | Tag and publish next patch release (`vX.Y.Z+1`) |
 | `make minor` | Tag and publish next minor release (`vX.Y+1.0`) |
 | `make major` | Tag and publish next major release (`vX+1.0.0`) |
+
+## User namespaces
+
+Public sites use `/projects/<namespace>/<project-slug>/`. Choose an optional unique
+username at signup or in Settings; otherwise the account's random UUID is used.
+Usernames are normalized to lowercase and accept 1–32 letters, numbers, or hyphens,
+starting and ending with a letter or number. UUIDs are longer than the username
+limit, so another account cannot claim your UUID. Changing or clearing a username
+changes all public site URLs immediately; old usernames are released for reuse.
+Management URLs remain `/projects/<project-slug>` and require the owning account.
+
+Project slugs are unique per account. Checkouts live at
+`PILO_DATA_DIR/repos/<user UUID>/<project-slug>` and stay there when usernames change.

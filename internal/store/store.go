@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +47,7 @@ const (
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
+	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
@@ -59,8 +61,9 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Project is one GitHub repo deployed as a static site at /<Slug>/.
+// Project is a GitHub repository deployed under its owner namespace.
 type Project struct {
+	Namespace  string    `json:"namespace"`
 	ID         string    `json:"id"`
 	Slug       string    `json:"slug"`       // URL path segment, e.g. "my-app"
 	UserID     string    `json:"user_id"`    // owner user account
@@ -249,7 +252,14 @@ func (s *Store) EffectiveWebhookSecret(userID string) string {
 
 // --- users ---------------------------------------------------------------
 
-func (s *Store) CreateUser(email, password string) (*User, error) {
+func (s *Store) CreateUser(email, password string, usernames ...string) (*User, error) {
+	username := ""
+	if len(usernames) > 0 {
+		username = strings.ToLower(strings.TrimSpace(usernames[0]))
+	}
+	if err := ValidateUsername(username); err != nil {
+		return nil, err
+	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return nil, errors.New("email cannot be empty")
@@ -267,7 +277,13 @@ func (s *Store) CreateUser(email, password string) (*User, error) {
 	now := time.Now().UTC()
 	uID := uuid.New().String()
 
-	row, err := s.queries.CreateUser(ctx, db.CreateUserParams{
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	q := s.queries.WithTx(tx)
+	row, err := q.CreateUser(ctx, db.CreateUserParams{
 		ID:           uID,
 		Email:        email,
 		PasswordHash: string(hash),
@@ -281,6 +297,17 @@ func (s *Store) CreateUser(email, password string) (*User, error) {
 		return nil, fmt.Errorf("inserting user: %w", err)
 	}
 
+	if err := q.UpdateUsername(ctx, db.UpdateUsernameParams{Username: username, UpdatedAt: now, ID: uID}); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return nil, ErrUsernameTaken
+		}
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	row.Username = username
+
 	// If this is the first user ever registered and there are legacy unowned projects,
 	// associate those projects with this initial user.
 	_ = s.adoptUnownedProjects(ctx, uID)
@@ -288,6 +315,7 @@ func (s *Store) CreateUser(email, password string) (*User, error) {
 	return &User{
 		ID:           row.ID,
 		Email:        row.Email,
+		Username:     row.Username,
 		PasswordHash: row.PasswordHash,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
@@ -317,6 +345,7 @@ func (s *Store) AuthenticateUser(email, password string) (*User, error) {
 	return &User{
 		ID:           row.ID,
 		Email:        row.Email,
+		Username:     row.Username,
 		PasswordHash: row.PasswordHash,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
@@ -335,6 +364,7 @@ func (s *Store) GetUserByID(id string) (*User, error) {
 	return &User{
 		ID:           row.ID,
 		Email:        row.Email,
+		Username:     row.Username,
 		PasswordHash: row.PasswordHash,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
@@ -354,6 +384,7 @@ func (s *Store) GetUserByEmail(email string) (*User, error) {
 	return &User{
 		ID:           row.ID,
 		Email:        row.Email,
+		Username:     row.Username,
 		PasswordHash: row.PasswordHash,
 		CreatedAt:    row.CreatedAt,
 		UpdatedAt:    row.UpdatedAt,
@@ -441,6 +472,7 @@ func (s *Store) GetSessionUser(sessionID string) (*User, error) {
 	return &User{
 		ID:        row.UserID,
 		Email:     row.Email,
+		Username:  row.Username,
 		CreatedAt: row.UserCreatedAt,
 		UpdatedAt: row.UserUpdatedAt,
 	}, nil
@@ -591,7 +623,7 @@ func (s *Store) All() []*Project {
 
 	var out []*Project
 	for _, r := range rows {
-		out = append(out, toProjectModel(r))
+		out = append(out, s.toProjectModel(r))
 	}
 	return out
 }
@@ -606,7 +638,7 @@ func (s *Store) AllForUser(userID string) []*Project {
 
 	var out []*Project
 	for _, r := range rows {
-		out = append(out, toProjectModel(r))
+		out = append(out, s.toProjectModel(r))
 	}
 	return out
 }
@@ -618,7 +650,7 @@ func (s *Store) Get(slug string) *Project {
 	if err != nil {
 		return nil
 	}
-	return toProjectModel(r)
+	return s.toProjectModel(r)
 }
 
 // GetForUser returns the project with the given slug owned by userID, or nil if not found.
@@ -631,7 +663,7 @@ func (s *Store) GetForUser(slug, userID string) *Project {
 	if err != nil {
 		return nil
 	}
-	return toProjectModel(r)
+	return s.toProjectModel(r)
 }
 
 // Put inserts or updates a project in the database.
@@ -643,7 +675,7 @@ func (s *Store) Put(p *Project) error {
 		p.CreatedAt = now
 	}
 	if p.ID == "" {
-		p.ID = p.Slug
+		p.ID = uuid.NewString()
 	}
 
 	return s.queries.UpsertProject(ctx, db.UpsertProjectParams{
@@ -677,8 +709,9 @@ func (s *Store) DeleteForUser(slug, userID string) error {
 	})
 }
 
-func toProjectModel(r db.Project) *Project {
+func (s *Store) toProjectModel(r db.Project) *Project {
 	return &Project{
+		Namespace:  s.Namespace(r.UserID),
 		ID:         r.ID,
 		Slug:       r.Slug,
 		UserID:     r.UserID,
@@ -801,4 +834,52 @@ func toWebhookLogModel(r db.WebhookLog) *WebhookLog {
 		Message:     r.Message,
 		CreatedAt:   r.CreatedAt,
 	}
+}
+
+var ErrUsernameTaken = errors.New("username is already taken")
+var usernamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// ValidateUsername reserves UUID-shaped names for generated account namespaces.
+func ValidateUsername(username string) error {
+	if username == "" {
+		return nil
+	}
+	if len(username) > 32 || !usernamePattern.MatchString(username) {
+		return errors.New("username must be 1–32 lowercase letters, numbers, or hyphens, starting and ending with a letter or number")
+	}
+	return nil
+}
+
+func (s *Store) SetUsername(userID, username string) error {
+	username = strings.ToLower(strings.TrimSpace(username))
+	if err := ValidateUsername(username); err != nil {
+		return err
+	}
+	err := s.queries.UpdateUsername(context.Background(), db.UpdateUsernameParams{Username: username, UpdatedAt: time.Now().UTC(), ID: userID})
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return ErrUsernameTaken
+	}
+	return err
+}
+
+func (s *Store) Namespace(userID string) string {
+	u, err := s.GetUserByID(userID)
+	if err == nil && u.Username != "" {
+		return u.Username
+	}
+	return userID
+}
+
+// CheckoutKey stays stable when a username changes.
+func (p *Project) CheckoutKey() string { return p.UserID + "/" + p.Slug }
+func (p *Project) PublicPath() string  { return "/projects/" + p.Namespace + "/" + p.Slug + "/" }
+
+// UserIDForNamespace resolves the current public namespace. Old usernames stop resolving.
+func (s *Store) UserIDForNamespace(namespace string) string {
+	var id string
+	err := s.db.QueryRow(`SELECT id FROM users WHERE (username = ? AND username != '') OR (id = ? AND username = '') LIMIT 1`, namespace, namespace).Scan(&id)
+	if err != nil {
+		return ""
+	}
+	return id
 }
