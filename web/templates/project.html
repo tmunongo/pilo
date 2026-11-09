@@ -88,19 +88,27 @@
       <h2 class="section-heading">deploys</h2>
       <div class="table-scroll" style="margin-top:16px;">
         <table class="deploys-table" aria-label="Deploy history">
+          <colgroup><col><col><col><col></colgroup>
           <thead>
             <tr>
               <th scope="col">sha</th>
               <th scope="col">commit</th>
               <th scope="col">when</th>
+              <th scope="col"><span class="visually-hidden">action</span></th>
             </tr>
           </thead>
           <tbody>
             {{range .Deploys}}
             <tr>
               <td>{{.SHA}}</td>
-              <td>{{.Message}}</td>
-              <td>{{.When}} <form method="post" action="/projects/{{$.Project.Slug}}/rollback" style="display:inline"><input type="hidden" name="release" value="{{.ID}}"><button type="submit">rollback</button></form></td>
+              <td>{{if .Message}}{{.Message}}{{else}}<span style="color:var(--muted);">message unavailable</span>{{end}}</td>
+              <td>{{.When}}</td>
+              <td class="deploy-action">
+                <form method="post" action="/projects/{{$.Project.Slug}}/rollback">
+                  <input type="hidden" name="release" value="{{.ID}}">
+                  <button type="submit" class="btn-text">rollback</button>
+                </form>
+              </td>
             </tr>
             {{end}}
           </tbody>

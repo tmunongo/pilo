@@ -68,7 +68,9 @@ go mod tidy
 PILO_PORT=8080 go run main.go
 ```
 
-Open `http://localhost:8080` in your browser and configure your GitHub Personal Access Token (PAT) under Settings.
+Open `http://localhost:8080` in your browser. Add an optional default access token under Settings, or enter a token for each project when creating or editing it. A project token takes precedence over the account token and the global fallback. Tokens are stored in the SQLite database.
+
+Use `owner/repo` for GitHub, or an HTTPS repository URL for GitHub, GitLab.com, or Codeberg. GitLab subgroup paths are supported. Automatic webhook deployments currently support GitHub only; use the redeploy button for GitLab and Codeberg projects.
 
 ---
 

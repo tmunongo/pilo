@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS projects (
     id          TEXT PRIMARY KEY,
     slug        TEXT NOT NULL,
     user_id     TEXT NOT NULL DEFAULT '',
+    repo_host   TEXT NOT NULL DEFAULT 'github.com',
+    access_token TEXT NOT NULL DEFAULT '',
     repo_owner  TEXT NOT NULL DEFAULT '',
     repo_name   TEXT NOT NULL DEFAULT '',
     branch      TEXT NOT NULL DEFAULT 'main',

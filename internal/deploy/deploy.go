@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -61,7 +62,12 @@ func authURL(u, token string) string {
 	if token == "" {
 		return u
 	}
-	return strings.Replace(u, "https://", fmt.Sprintf("https://%s@", token), 1)
+	parsed, err := url.Parse(u)
+	if err != nil || parsed.Scheme != "https" {
+		return u
+	}
+	parsed.User = url.UserPassword("oauth2", token)
+	return parsed.String()
 }
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
@@ -111,6 +117,8 @@ func (d *Deployer) CloneWithSubdir(key, repoURL, branch, token, subdir string) (
 	if err != nil {
 		if token != "" {
 			out = strings.ReplaceAll(out, token, "[redacted]")
+			out = strings.ReplaceAll(out, url.QueryEscape(token), "[redacted]")
+			out = strings.ReplaceAll(out, url.UserPassword("oauth2", token).String(), "[redacted]")
 		}
 		return "", fmt.Errorf("git clone failed: %w: %s", err, out)
 	}
@@ -127,6 +135,11 @@ func (d *Deployer) publish(key, repo, ref, subdir string) (string, error) {
 		return "", fmt.Errorf("resolve commit: %w", err)
 	}
 	commit = strings.TrimSpace(commit)
+	message, err := runGit(repo, "log", "-1", "--format=%s", commit)
+	if err != nil {
+		return "", fmt.Errorf("read commit message: %w", err)
+	}
+	message = strings.TrimSpace(message)
 	id := "r_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	root := d.releaseDir(key)
 	dest := filepath.Join(root, id)
@@ -165,7 +178,7 @@ func (d *Deployer) publish(key, repo, ref, subdir string) (string, error) {
 	if err != nil || !info.IsDir() {
 		return "", fmt.Errorf("site subdirectory %q does not exist in release", subdir)
 	}
-	meta := releaseMeta{Commit: commit, Created: time.Now().UTC(), Subdir: subdir}
+	meta := releaseMeta{Commit: commit, Message: message, Created: time.Now().UTC(), Subdir: subdir}
 	b, _ := json.Marshal(meta)
 	if err = os.WriteFile(filepath.Join(root, id+".json"), b, 0600); err != nil {
 		return "", err

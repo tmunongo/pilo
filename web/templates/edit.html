@@ -16,7 +16,7 @@
 
       <div class="kv-section section-gap">
         <div class="form-group" style="margin-top:24px;">
-          <label for="repo">github repository</label>
+          <label for="repo">repository</label>
           <input
             id="repo"
             name="repo"
@@ -24,7 +24,7 @@
             required
             class="form-input"
             value="{{.Form.repo}}"
-            placeholder="owner/repo or full github.com URL"
+            placeholder="owner/repo or HTTPS URL (GitHub, GitLab, Codeberg)"
             autocomplete="off"
             spellcheck="false">
         </div>
@@ -54,13 +54,20 @@
         </div>
       </div>
 
+      <div class="form-group" style="margin-top:24px;">
+        <label for="access_token">project access token (optional)</label>
+        <input id="access_token" name="access_token" type="password" class="form-input" autocomplete="new-password">
+        <p class="section-prose">Leave blank to keep the current token. Otherwise the token from settings is used.</p>
+        {{if .Project.AccessToken}}<label><input type="checkbox" name="remove_access_token" value="1"> Remove project token and use the default</label>{{end}}
+      </div>
+
       <div style="margin-top:32px; display:flex; gap:12px; align-items:center;">
         <button type="submit" class="btn-primary">save &amp; redeploy</button>
         <a href="/projects/{{.Project.Slug}}" class="btn-text">cancel</a>
       </div>
 
       <p class="section-prose" style="margin-top:20px; font-size:15px;">
-        Private repos require a GitHub personal access token set in <a href="/settings" class="btn-text" style="font-size:15px; font-family:'Hanken Grotesk',sans-serif;">settings</a>.
+        Set a default access token in <a href="/settings" class="btn-text" style="font-size:15px; font-family:'Hanken Grotesk',sans-serif;">settings</a>.
       </p>
     </form>
 

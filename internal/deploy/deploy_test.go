@@ -86,8 +86,8 @@ func TestDeployerGitOperations(t *testing.T) {
 
 	// 5. Commits history log
 	commits := d.Commits("my-app", 5)
-	if len(commits) == 0 {
-		t.Errorf("expected commits list from deployer log")
+	if len(commits) != 2 || commits[0].Message != "second commit" || commits[1].Message != "first commit" {
+		t.Fatalf("unexpected deploy history: %+v", commits)
 	}
 
 	// 6. Non-existent slug commits returns nil

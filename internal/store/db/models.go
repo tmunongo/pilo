@@ -19,18 +19,20 @@ type PasswordReset struct {
 }
 
 type Project struct {
-	ID         string    `json:"id"`
-	Slug       string    `json:"slug"`
-	UserID     string    `json:"user_id"`
-	RepoOwner  string    `json:"repo_owner"`
-	RepoName   string    `json:"repo_name"`
-	Branch     string    `json:"branch"`
-	Subdir     string    `json:"subdir"`
-	Status     string    `json:"status"`
-	LastCommit string    `json:"last_commit"`
-	LastError  string    `json:"last_error"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Slug        string    `json:"slug"`
+	UserID      string    `json:"user_id"`
+	RepoHost    string    `json:"repo_host"`
+	AccessToken string    `json:"access_token"`
+	RepoOwner   string    `json:"repo_owner"`
+	RepoName    string    `json:"repo_name"`
+	Branch      string    `json:"branch"`
+	Subdir      string    `json:"subdir"`
+	Status      string    `json:"status"`
+	LastCommit  string    `json:"last_commit"`
+	LastError   string    `json:"last_error"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Session struct {

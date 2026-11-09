@@ -305,7 +305,7 @@ func (q *Queries) GetLatestWebhookLogForUser(ctx context.Context, userID string)
 }
 
 const getProjectBySlug = `-- name: GetProjectBySlug :one
-SELECT id, slug, user_id, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE slug = ?
 LIMIT 1
 `
@@ -317,6 +317,8 @@ func (q *Queries) GetProjectBySlug(ctx context.Context, slug string) (Project, e
 		&i.ID,
 		&i.Slug,
 		&i.UserID,
+		&i.RepoHost,
+		&i.AccessToken,
 		&i.RepoOwner,
 		&i.RepoName,
 		&i.Branch,
@@ -331,7 +333,7 @@ func (q *Queries) GetProjectBySlug(ctx context.Context, slug string) (Project, e
 }
 
 const getProjectBySlugAndUserID = `-- name: GetProjectBySlugAndUserID :one
-SELECT id, slug, user_id, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE slug = ? AND user_id = ?
 LIMIT 1
 `
@@ -348,6 +350,8 @@ func (q *Queries) GetProjectBySlugAndUserID(ctx context.Context, arg GetProjectB
 		&i.ID,
 		&i.Slug,
 		&i.UserID,
+		&i.RepoHost,
+		&i.AccessToken,
 		&i.RepoOwner,
 		&i.RepoName,
 		&i.Branch,
@@ -472,7 +476,7 @@ func (q *Queries) GetUserSetting(ctx context.Context, arg GetUserSettingParams) 
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, slug, user_id, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 ORDER BY created_at ASC
 `
 
@@ -489,6 +493,8 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 			&i.ID,
 			&i.Slug,
 			&i.UserID,
+			&i.RepoHost,
+			&i.AccessToken,
 			&i.RepoOwner,
 			&i.RepoName,
 			&i.Branch,
@@ -513,7 +519,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 const listProjectsByUserID = `-- name: ListProjectsByUserID :many
-SELECT id, slug, user_id, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE user_id = ?
 ORDER BY created_at ASC
 `
@@ -531,6 +537,8 @@ func (q *Queries) ListProjectsByUserID(ctx context.Context, userID string) ([]Pr
 			&i.ID,
 			&i.Slug,
 			&i.UserID,
+			&i.RepoHost,
+			&i.AccessToken,
 			&i.RepoOwner,
 			&i.RepoName,
 			&i.Branch,
@@ -799,12 +807,14 @@ func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) 
 
 const upsertProject = `-- name: UpsertProject :exec
 INSERT INTO projects (
-    id, slug, user_id, repo_owner, repo_name, branch, subdir,
+    id, slug, user_id, repo_owner, repo_name, branch, subdir, repo_host, access_token,
     status, last_commit, last_error, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     slug        = excluded.slug,
     user_id     = excluded.user_id,
+    repo_host   = excluded.repo_host,
+    access_token = excluded.access_token,
     repo_owner  = excluded.repo_owner,
     repo_name   = excluded.repo_name,
     branch      = excluded.branch,
@@ -816,18 +826,20 @@ ON CONFLICT(id) DO UPDATE SET
 `
 
 type UpsertProjectParams struct {
-	ID         string    `json:"id"`
-	Slug       string    `json:"slug"`
-	UserID     string    `json:"user_id"`
-	RepoOwner  string    `json:"repo_owner"`
-	RepoName   string    `json:"repo_name"`
-	Branch     string    `json:"branch"`
-	Subdir     string    `json:"subdir"`
-	Status     string    `json:"status"`
-	LastCommit string    `json:"last_commit"`
-	LastError  string    `json:"last_error"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Slug        string    `json:"slug"`
+	UserID      string    `json:"user_id"`
+	RepoOwner   string    `json:"repo_owner"`
+	RepoName    string    `json:"repo_name"`
+	Branch      string    `json:"branch"`
+	Subdir      string    `json:"subdir"`
+	RepoHost    string    `json:"repo_host"`
+	AccessToken string    `json:"access_token"`
+	Status      string    `json:"status"`
+	LastCommit  string    `json:"last_commit"`
+	LastError   string    `json:"last_error"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func (q *Queries) UpsertProject(ctx context.Context, arg UpsertProjectParams) error {
@@ -839,6 +851,8 @@ func (q *Queries) UpsertProject(ctx context.Context, arg UpsertProjectParams) er
 		arg.RepoName,
 		arg.Branch,
 		arg.Subdir,
+		arg.RepoHost,
+		arg.AccessToken,
 		arg.Status,
 		arg.LastCommit,
 		arg.LastError,

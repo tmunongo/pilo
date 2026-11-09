@@ -63,24 +63,37 @@ type Session struct {
 
 // Project is a GitHub repository deployed under its owner namespace.
 type Project struct {
-	Namespace  string    `json:"namespace"`
-	ID         string    `json:"id"`
-	Slug       string    `json:"slug"`       // URL path segment, e.g. "my-app"
-	UserID     string    `json:"user_id"`    // owner user account
-	RepoOwner  string    `json:"repo_owner"` // e.g. "octocat"
-	RepoName   string    `json:"repo_name"`  // e.g. "my-app"
-	Branch     string    `json:"branch"`     // default "main"
-	Subdir     string    `json:"subdir"`     // optional, for monorepos
-	Status     Status    `json:"status"`
-	LastCommit string    `json:"last_commit"`
-	LastError  string    `json:"last_error,omitempty"`
-	UpdatedAt  time.Time `json:"updated_at"`
-	CreatedAt  time.Time `json:"created_at"`
+	Namespace   string    `json:"namespace"`
+	ID          string    `json:"id"`
+	Slug        string    `json:"slug"`    // URL path segment, e.g. "my-app"
+	UserID      string    `json:"user_id"` // owner user account
+	RepoHost    string    `json:"repo_host"`
+	AccessToken string    `json:"-"`
+	RepoOwner   string    `json:"repo_owner"` // e.g. "octocat"
+	RepoName    string    `json:"repo_name"`  // e.g. "my-app"
+	Branch      string    `json:"branch"`     // default "main"
+	Subdir      string    `json:"subdir"`     // optional, for monorepos
+	Status      Status    `json:"status"`
+	LastCommit  string    `json:"last_commit"`
+	LastError   string    `json:"last_error,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // RepoURL returns the https clone URL for this project's GitHub repo.
 func (p *Project) RepoURL() string {
-	return fmt.Sprintf("https://github.com/%s/%s.git", p.RepoOwner, p.RepoName)
+	host := p.RepoHost
+	if host == "" {
+		host = "github.com"
+	}
+	return fmt.Sprintf("https://%s/%s/%s.git", host, p.RepoOwner, p.RepoName)
+}
+
+func (s *Store) ProjectToken(p *Project) string {
+	if p.AccessToken != "" {
+		return p.AccessToken
+	}
+	return s.EffectiveGitHubToken(p.UserID)
 }
 
 // WebhookLog represents an incoming webhook event delivery log for a deployment.
@@ -679,18 +692,20 @@ func (s *Store) Put(p *Project) error {
 	}
 
 	return s.queries.UpsertProject(ctx, db.UpsertProjectParams{
-		ID:         p.ID,
-		Slug:       p.Slug,
-		UserID:     p.UserID,
-		RepoOwner:  p.RepoOwner,
-		RepoName:   p.RepoName,
-		Branch:     p.Branch,
-		Subdir:     p.Subdir,
-		Status:     string(p.Status),
-		LastCommit: p.LastCommit,
-		LastError:  p.LastError,
-		CreatedAt:  p.CreatedAt.UTC(),
-		UpdatedAt:  p.UpdatedAt.UTC(),
+		ID:          p.ID,
+		Slug:        p.Slug,
+		UserID:      p.UserID,
+		RepoHost:    p.RepoHost,
+		AccessToken: p.AccessToken,
+		RepoOwner:   p.RepoOwner,
+		RepoName:    p.RepoName,
+		Branch:      p.Branch,
+		Subdir:      p.Subdir,
+		Status:      string(p.Status),
+		LastCommit:  p.LastCommit,
+		LastError:   p.LastError,
+		CreatedAt:   p.CreatedAt.UTC(),
+		UpdatedAt:   p.UpdatedAt.UTC(),
 	})
 }
 
@@ -711,19 +726,21 @@ func (s *Store) DeleteForUser(slug, userID string) error {
 
 func (s *Store) toProjectModel(r db.Project) *Project {
 	return &Project{
-		Namespace:  s.Namespace(r.UserID),
-		ID:         r.ID,
-		Slug:       r.Slug,
-		UserID:     r.UserID,
-		RepoOwner:  r.RepoOwner,
-		RepoName:   r.RepoName,
-		Branch:     r.Branch,
-		Subdir:     r.Subdir,
-		Status:     Status(r.Status),
-		LastCommit: r.LastCommit,
-		LastError:  r.LastError,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
+		Namespace:   s.Namespace(r.UserID),
+		ID:          r.ID,
+		Slug:        r.Slug,
+		UserID:      r.UserID,
+		RepoHost:    r.RepoHost,
+		AccessToken: r.AccessToken,
+		RepoOwner:   r.RepoOwner,
+		RepoName:    r.RepoName,
+		Branch:      r.Branch,
+		Subdir:      r.Subdir,
+		Status:      Status(r.Status),
+		LastCommit:  r.LastCommit,
+		LastError:   r.LastError,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
 	}
 }
 

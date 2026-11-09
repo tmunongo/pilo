@@ -454,24 +454,39 @@ func (h *Handlers) NewForm(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
-var repoURLPattern = regexp.MustCompile(`github\.com[:/]([\w.-]+)/([\w.-]+?)(\.git)?/?$`)
 var slugPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+var repoPartPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 
-// parseRepo accepts "owner/repo", a full https URL, or an ssh-style
-// git@github.com:owner/repo.git reference and extracts owner/repo.
-func parseRepo(input string) (owner, name string, err error) {
+// parseRepo accepts GitHub shorthand or an HTTPS URL on a supported host.
+func parseRepo(input string) (host, owner, name string, err error) {
 	input = strings.TrimSpace(input)
-	if m := repoURLPattern.FindStringSubmatch(input); m != nil {
-		return m[1], m[2], nil
+	host = "github.com"
+	if strings.HasPrefix(input, "git@") {
+		parts := strings.SplitN(strings.TrimPrefix(input, "git@"), ":", 2)
+		if len(parts) != 2 {
+			return "", "", "", fmt.Errorf("invalid repository address")
+		}
+		host, input = parts[0], parts[1]
+	} else if strings.Contains(input, "://") {
+		u, e := url.Parse(input)
+		if e != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Port() != "" {
+			return "", "", "", fmt.Errorf("repository must be a plain HTTPS URL")
+		}
+		host, input = strings.ToLower(u.Hostname()), strings.TrimPrefix(u.Path, "/")
 	}
-	if parts := strings.Split(input, "/"); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
-		return parts[0], strings.TrimSuffix(parts[1], ".git"), nil
+	if host != "github.com" && host != "gitlab.com" && host != "codeberg.org" {
+		return "", "", "", fmt.Errorf("repository host must be github.com, gitlab.com, or codeberg.org")
 	}
-	// Give a specific hint when the input looks like a bare repo name.
-	if !strings.Contains(input, "/") && input != "" {
-		return "", "", fmt.Errorf("repo must include the owner: try %q", "owner/"+input)
+	parts := strings.Split(strings.TrimSuffix(strings.TrimSuffix(input, "/"), ".git"), "/")
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("repository must include an owner and name")
 	}
-	return "", "", fmt.Errorf("repo must be in owner/repo format (e.g. %q) or a full GitHub URL", "acme/my-site")
+	for _, part := range parts {
+		if !repoPartPattern.MatchString(part) || part == "." || part == ".." {
+			return "", "", "", fmt.Errorf("invalid repository path")
+		}
+	}
+	return host, strings.Join(parts[:len(parts)-1], "/"), parts[len(parts)-1], nil
 }
 
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +512,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		}))
 	}
 
-	owner, name, err := parseRepo(form["repo"])
+	host, owner, name, err := parseRepo(form["repo"])
 	if err != nil {
 		fail(err.Error())
 		return
@@ -531,15 +546,17 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := &store.Project{
-		Namespace: h.Store.Namespace(u.ID),
-		Slug:      slug,
-		UserID:    u.ID,
-		RepoOwner: owner,
-		RepoName:  name,
-		Branch:    branch,
-		Subdir:    strings.TrimSpace(form["subdir"]),
-		Status:    store.StatusCloning,
-		CreatedAt: time.Now(),
+		Namespace:   h.Store.Namespace(u.ID),
+		Slug:        slug,
+		UserID:      u.ID,
+		RepoHost:    host,
+		AccessToken: strings.TrimSpace(r.FormValue("access_token")),
+		RepoOwner:   owner,
+		RepoName:    name,
+		Branch:      branch,
+		Subdir:      strings.TrimSpace(form["subdir"]),
+		Status:      store.StatusCloning,
+		CreatedAt:   time.Now(),
 	}
 	if err := h.Store.Put(p); err != nil {
 		fail("failed to save project: " + err.Error())
@@ -562,7 +579,7 @@ func (h *Handlers) deployAndRegister(p *store.Project) {
 	if p == nil {
 		return
 	}
-	token := h.Store.EffectiveGitHubToken(p.UserID)
+	token := h.Store.ProjectToken(p)
 	log.Printf("deploy: cloning slug=%s repo=%s/%s branch=%s", p.Slug, p.RepoOwner, p.RepoName, p.Branch)
 	commit, err := h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 	if err != nil {
@@ -630,7 +647,7 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	token := h.Store.EffectiveGitHubToken(u.ID)
+	token := h.Store.ProjectToken(p)
 	commit, err := h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 	if err != nil {
 		p.Status = store.StatusError
@@ -708,7 +725,7 @@ func (h *Handlers) EditForm(w http.ResponseWriter, r *http.Request) {
 	render(w, h.Pages["edit"], h.commonData(r, "", map[string]any{
 		"Project": p,
 		"Form": map[string]string{
-			"repo":   p.RepoOwner + "/" + p.RepoName,
+			"repo":   p.RepoURL(),
 			"branch": p.Branch,
 			"subdir": p.Subdir,
 		},
@@ -743,7 +760,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		}))
 	}
 
-	owner, name, err := parseRepo(form["repo"])
+	host, owner, name, err := parseRepo(form["repo"])
 	if err != nil {
 		fail(err.Error())
 		return
@@ -765,6 +782,12 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		http.NotFound(w, r)
 		return
+	}
+	p.RepoHost = host
+	if r.FormValue("remove_access_token") == "1" {
+		p.AccessToken = ""
+	} else if token := strings.TrimSpace(r.FormValue("access_token")); token != "" {
+		p.AccessToken = token
 	}
 	p.RepoOwner = owner
 	p.RepoName = name
@@ -910,7 +933,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 	if event == "ping" {
 		logged := 0
 		for _, p := range h.Store.All() {
-			if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+			if (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
 				sec := h.Store.EffectiveWebhookSecret(p.UserID)
 				if sec != "" && !verifySignature(sec, body, sig) {
 					_ = h.Store.CreateWebhookLog(&store.WebhookLog{
@@ -950,7 +973,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 
 	redeployedCount := 0
 	for _, p := range h.Store.All() {
-		if strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+		if (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
 			// Validate per-project signature before any branch checks, so an
 			// invalid signature never produces an "ignored" log entry.
 			sec := h.Store.EffectiveWebhookSecret(p.UserID)
@@ -992,11 +1015,11 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				p = current
-				if p.Branch != branch || !strings.EqualFold(p.RepoOwner, owner) || !strings.EqualFold(p.RepoName, repo) {
+				if (p.RepoHost != "" && p.RepoHost != "github.com") || p.Branch != branch || !strings.EqualFold(p.RepoOwner, owner) || !strings.EqualFold(p.RepoName, repo) {
 					unlock()
 					continue
 				}
-				token := h.Store.EffectiveGitHubToken(p.UserID)
+				token := h.Store.ProjectToken(p)
 				commit, pullErr = h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 			} else {
 				pullErr = errors.New("deployer not configured")
