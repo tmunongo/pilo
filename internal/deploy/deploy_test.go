@@ -108,3 +108,72 @@ func TestDeployerGitOperations(t *testing.T) {
 		t.Errorf("expected checkout dir to be removed")
 	}
 }
+
+func TestRejectSymlinkPreservesLiveReleaseAndRollback(t *testing.T) {
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin")
+	if err := os.Mkdir(origin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = origin
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git: %v: %s", err, out)
+		}
+	}
+	git("init", "-b", "main")
+	git("config", "user.name", "Test")
+	git("config", "user.email", "test@example.com")
+	file := filepath.Join(origin, "index.html")
+	if err := os.WriteFile(file, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-m", "old")
+	d := deploy.New(filepath.Join(root, "repos"))
+	if _, err := d.Clone("site", origin, "main", ""); err != nil {
+		t.Fatal(err)
+	}
+	releases := d.Commits("site", 5)
+	if len(releases) != 1 {
+		t.Fatal(releases)
+	}
+	if _, err := os.Stat(filepath.Join(d.PathFor("site"), ".git")); !os.IsNotExist(err) {
+		t.Fatal("git metadata is served")
+	}
+	if err := os.Symlink("/etc/passwd", filepath.Join(origin, "leak")); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-m", "unsafe")
+	if _, err := d.Clone("site", origin, "main", ""); err == nil {
+		t.Fatal("symlink release accepted")
+	}
+	b, err := os.ReadFile(filepath.Join(d.PathFor("site"), "index.html"))
+	if err != nil || string(b) != "old" {
+		t.Fatalf("live release changed: %q %v", b, err)
+	}
+	if err := os.Remove(filepath.Join(origin, "leak")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "-A")
+	git("commit", "-m", "new")
+	if _, err := d.Clone("site", origin, "main", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Rollback("site", releases[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	b, err = os.ReadFile(filepath.Join(d.PathFor("site"), "index.html"))
+	if err != nil || string(b) != "old" {
+		t.Fatalf("rollback failed: %q %v", b, err)
+	}
+	if _, err := d.Rollback("site", "../../origin"); err == nil {
+		t.Fatal("invalid release ID accepted")
+	}
+}

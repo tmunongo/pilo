@@ -100,7 +100,7 @@
             <tr>
               <td>{{.SHA}}</td>
               <td>{{.Message}}</td>
-              <td>{{.When}}</td>
+              <td>{{.When}} <form method="post" action="/projects/{{$.Project.Slug}}/rollback" style="display:inline"><input type="hidden" name="release" value="{{.ID}}"><button type="submit">rollback</button></form></td>
             </tr>
             {{end}}
           </tbody>

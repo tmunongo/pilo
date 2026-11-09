@@ -202,7 +202,7 @@ Deploy to your production server:
 3. Set **Payload URL** to `https://pilo.yourdomain.com/webhooks/github` (or `http://your-server-ip:8080/webhooks/github`).
 4. Set **Content type** to `application/json`.
 5. Enter the same **Secret** you defined in Pilo.
-6. On every `push` event, Pilo verifies the `X-Hub-Signature-256` signature and automatically runs `git pull` on the targeted project branch.
+6. On every `push` event, Pilo verifies the `X-Hub-Signature-256` signature and fetches the targeted project branch into staging and publishes a validated release.
 
 ---
 
@@ -211,9 +211,9 @@ Deploy to your production server:
 ```
 /data/
 ├── paas.db          ← SQLite database (Projects, Settings)
-└── repos/           ← Managed GitHub repositories
-    ├── my-app/      ← git clone of owner/repo@branch
-    └── docs-site/   ← git clone of owner/repo@branch
+└── repos/
+    ├── <user UUID>/<slug>  ← link to the active release
+    └── .releases/<user UUID>/<slug>/  ← retained snapshots and metadata
 ```
 
 ---
@@ -241,5 +241,13 @@ limit, so another account cannot claim your UUID. Changing or clearing a usernam
 changes all public site URLs immediately; old usernames are released for reuse.
 Management URLs remain `/projects/<project-slug>` and require the owning account.
 
-Project slugs are unique per account. Checkouts live at
+Project slugs are unique per account. Active release links live at
 `PILO_DATA_DIR/repos/<user UUID>/<project-slug>` and stay there when usernames change.
+
+Deployments reject symlinks and files over 50 MiB, releases over 500 MiB, or more than 10,000 files. Five recent releases are retained for rollback from the project page. Git fetches run as the Pilo process user; isolate the service and apply storage quotas when repositories are untrusted.
+
+On the first startup after upgrading from checkout-based deployments, Pilo
+converts each existing checkout's committed `HEAD` to a release. Stop the old
+service and back up the data volume before upgrading; uncommitted checkout
+changes are not included. Conversion stops if a release fails validation. The
+checkout is restored on failure, and an interrupted move is recovered on restart.

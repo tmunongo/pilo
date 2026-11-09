@@ -158,6 +158,7 @@ func (h *Handlers) Mux() http.Handler {
 	mux.Handle("GET /projects/{slug}/edit", h.requireAuth(http.HandlerFunc(h.EditForm)))
 	mux.Handle("POST /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Update)))
 	mux.Handle("POST /projects/{slug}/redeploy", h.requireAuth(http.HandlerFunc(h.Redeploy)))
+	mux.Handle("POST /projects/{slug}/rollback", h.requireAuth(http.HandlerFunc(h.Rollback)))
 	mux.Handle("DELETE /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Delete)))
 	mux.Handle("GET /settings", h.requireAuth(http.HandlerFunc(h.SettingsForm)))
 	mux.Handle("POST /settings", h.requireAuth(http.HandlerFunc(h.SettingsSave)))
@@ -519,6 +520,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := deploy.ValidateSubdir(strings.TrimSpace(form["subdir"])); err != nil {
+		fail(err.Error())
+		return
+	}
+
 	branch := strings.TrimSpace(form["branch"])
 	if branch == "" {
 		branch = "main"
@@ -550,9 +556,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 // status in the store, and — on success — registers its route with the
 // live router so it's immediately reachable.
 func (h *Handlers) deployAndRegister(p *store.Project) {
+	unlock := h.Deployer.Lock(p.CheckoutKey())
+	defer unlock()
+	p = h.Store.GetForUser(p.Slug, p.UserID)
+	if p == nil {
+		return
+	}
 	token := h.Store.EffectiveGitHubToken(p.UserID)
 	log.Printf("deploy: cloning slug=%s repo=%s/%s branch=%s", p.Slug, p.RepoOwner, p.RepoName, p.Branch)
-	commit, err := h.Deployer.Clone(p.CheckoutKey(), p.RepoURL(), p.Branch, token)
+	commit, err := h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
@@ -570,7 +582,7 @@ func (h *Handlers) deployAndRegister(p *store.Project) {
 	if p.Subdir != "" {
 		root = root + "/" + p.Subdir
 	}
-	h.Router.RegisterProject(p.CheckoutKey(), http.FileServer(http.Dir(root)))
+	h.Router.RegisterProject(p.CheckoutKey(), h.Deployer.SiteHandler(p.CheckoutKey()))
 	log.Printf("deploy: clone ok slug=%s commit=%s serving=%s", p.Slug, commit, root)
 }
 
@@ -612,14 +624,21 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	unlock := h.Deployer.Lock(p.CheckoutKey())
+	defer unlock()
+	if p = h.Store.GetForUser(slug, u.ID); p == nil {
+		http.NotFound(w, r)
+		return
+	}
 	token := h.Store.EffectiveGitHubToken(u.ID)
-	commit, err := h.Deployer.Pull(p.CheckoutKey(), p.Branch, token)
+	commit, err := h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 	if err != nil {
 		p.Status = store.StatusError
 		p.LastError = err.Error()
 		log.Printf("redeploy: pull failed slug=%s error=%v", slug, err)
 	} else {
 		p.Status = store.StatusLive
+		h.Router.RegisterProject(p.CheckoutKey(), h.Deployer.SiteHandler(p.CheckoutKey()))
 		p.LastCommit = commit
 		p.LastError = ""
 		log.Printf("redeploy: ok slug=%s commit=%s user=%s", slug, commit, u.Email)
@@ -634,6 +653,32 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/projects/"+slug, http.StatusSeeOther)
 }
 
+func (h *Handlers) Rollback(w http.ResponseWriter, r *http.Request) {
+	u := userFromContext(r.Context())
+	p := h.Store.GetForUser(r.PathValue("slug"), u.ID)
+	if p == nil {
+		http.NotFound(w, r)
+		return
+	}
+	unlock := h.Deployer.Lock(p.CheckoutKey())
+	defer unlock()
+	if h.Store.GetForUser(p.Slug, u.ID) == nil {
+		http.NotFound(w, r)
+		return
+	}
+	commit, err := h.Deployer.Rollback(p.CheckoutKey(), r.FormValue("release"))
+	if err != nil {
+		http.Error(w, "rollback failed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	p.Status = store.StatusLive
+	p.LastCommit = commit
+	p.LastError = ""
+	_ = h.Store.Put(p)
+	h.Router.RegisterProject(p.CheckoutKey(), h.Deployer.SiteHandler(p.CheckoutKey()))
+	http.Redirect(w, r, "/projects/"+p.Slug, http.StatusSeeOther)
+}
+
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	u := userFromContext(r.Context())
@@ -642,6 +687,8 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	unlock := h.Deployer.Lock(p.CheckoutKey())
+	defer unlock()
 	h.Router.UnregisterProject(p.CheckoutKey())
 	_ = h.Deployer.Remove(p.CheckoutKey())
 	_ = h.Store.DeleteForUser(slug, u.ID)
@@ -702,11 +749,23 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := deploy.ValidateSubdir(strings.TrimSpace(form["subdir"])); err != nil {
+		fail(err.Error())
+		return
+	}
+
 	branch := strings.TrimSpace(form["branch"])
 	if branch == "" {
 		branch = "main"
 	}
 
+	unlock := h.Deployer.Lock(p.CheckoutKey())
+	defer unlock()
+	p = h.Store.GetForUser(slug, u.ID)
+	if p == nil {
+		http.NotFound(w, r)
+		return
+	}
 	p.RepoOwner = owner
 	p.RepoName = name
 	p.Branch = branch
@@ -924,9 +983,21 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 
 			var commit string
 			var pullErr error
+			var unlock func()
 			if h.Deployer != nil {
+				unlock = h.Deployer.Lock(p.CheckoutKey())
+				current := h.Store.GetForUser(p.Slug, p.UserID)
+				if current == nil {
+					unlock()
+					continue
+				}
+				p = current
+				if p.Branch != branch || !strings.EqualFold(p.RepoOwner, owner) || !strings.EqualFold(p.RepoName, repo) {
+					unlock()
+					continue
+				}
 				token := h.Store.EffectiveGitHubToken(p.UserID)
-				commit, pullErr = h.Deployer.Pull(p.CheckoutKey(), p.Branch, token)
+				commit, pullErr = h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
 			} else {
 				pullErr = errors.New("deployer not configured")
 			}
@@ -946,6 +1017,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 				})
 			} else {
 				p.Status = store.StatusLive
+				h.Router.RegisterProject(p.CheckoutKey(), h.Deployer.SiteHandler(p.CheckoutKey()))
 				p.LastCommit = commit
 				p.LastError = ""
 				log.Printf("webhook redeploy %s success: commit %s", p.Slug, commit)
@@ -974,6 +1046,9 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			_ = h.Store.Put(p)
+			if unlock != nil {
+				unlock()
+			}
 			redeployedCount++
 		}
 	}

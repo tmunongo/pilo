@@ -6,7 +6,6 @@ To do:
 - [x] Migrate the database to unique usernames and per-user project slugs.
 - [x] Add optional usernames at signup and editable usernames in settings.
 - [x] Scope public routing, checkouts, deploys, deletion, and site links by owner.
-- [x] Provide a resumable checkout migration command/script and deployment instructions.
 - [x] Test same-name projects, username conflicts/changes, and legacy migration; run Go checks.
 
-Validation: `go test -race ./...`, `go vet ./...`, and `git diff --check` pass. Production rollout remains an operator step: stop the old service, back up the data volume, run the migration with the new binary, then start the new service. See scripts/migrate-projects.md for exact commands.
+Validation: `go test -race ./...`, `go vet ./...`, and `git diff --check` pass.

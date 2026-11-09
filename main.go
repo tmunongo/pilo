@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -26,8 +25,6 @@ func getenv(key, fallback string) string {
 }
 
 func main() {
-	migrateOnly := flag.Bool("migrate-projects", false, "migrate legacy checkouts and exit (stop the server first)")
-	flag.Parse()
 	dataDir := getenv("PILO_DATA_DIR", "./data")
 	port := getenv("PILO_PORT", "8080")
 	baseURL := getenv("PILO_BASE_URL", "http://localhost:"+port)
@@ -55,12 +52,8 @@ func main() {
 
 	dep := deploy.New(filepath.Join(dataDir, "repos"))
 
-	if err := dep.MigrateProjects(st.All()); err != nil {
-		log.Fatalf("migrating project checkouts: %v", err)
-	}
-	if *migrateOnly {
-		log.Print("project migration complete")
-		return
+	if err := dep.MigrateReleases(st.All()); err != nil {
+		log.Fatalf("migrating project releases: %v", err)
 	}
 
 	router := server.NewRouter(nil) // admin handler wired in below
@@ -85,11 +78,15 @@ func main() {
 	// Re-register routes for every project already known to the store,
 	// so a restart doesn't take existing tools offline.
 	for _, p := range st.All() {
+		if err := deploy.ValidateSubdir(p.Subdir); err != nil {
+			log.Printf("skipping project %s: %v", p.Slug, err)
+			continue
+		}
 		root := dep.PathFor(p.CheckoutKey())
 		if p.Subdir != "" {
 			root = root + "/" + p.Subdir
 		}
-		router.RegisterProject(p.CheckoutKey(), http.FileServer(http.Dir(root)))
+		router.RegisterProject(p.CheckoutKey(), dep.SiteHandler(p.CheckoutKey()))
 		log.Printf("registered existing project: %s -> %s", p.PublicPath(), root)
 	}
 
