@@ -1,15 +1,21 @@
+# syntax=docker/dockerfile:1
 # Multi-stage Dockerfile for Pilo
 
-FROM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+COPY main.go ./
+COPY internal/ ./internal/
+COPY web/ ./web/
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o pilo main.go
+ARG TARGETOS TARGETARCH
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o pilo main.go
 
 FROM alpine:3.20
 
