@@ -211,7 +211,7 @@ func TestWebhookLoggingAndDisplay(t *testing.T) {
 	}
 
 	// 4. GET / (index) should display LastWebhookEvent
-	reqIndex := httptest.NewRequest("GET", "/", nil)
+	reqIndex := httptest.NewRequest("GET", "/dashboard", nil)
 	reqIndex.AddCookie(cookie)
 	recIndex := httptest.NewRecorder()
 	router.ServeHTTP(recIndex, reqIndex)

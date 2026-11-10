@@ -96,7 +96,7 @@ func TestCrossTenantProjectIsolation(t *testing.T) {
 	req.AddCookie(cookie1)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if loc := rec.Header().Get("HX-Redirect"); loc != "/" {
+	if loc := rec.Header().Get("HX-Redirect"); loc != "/dashboard" {
 		t.Errorf("expected HX-Redirect to / on successful delete, got %s", loc)
 	}
 	if st.Get("app-one") != nil {

@@ -6,7 +6,7 @@
 
     <h1 class="page-title">Projects</h1>
 
-    <div id="projects-status"{{if .BuildingProject}} hx-get="/" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="innerHTML"{{end}}>
+    <div id="projects-status"{{if .BuildingProject}} hx-get="/dashboard" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="innerHTML"{{end}}>
     <p class="page-lead" style="margin-top:16px;">
       {{if not .Projects}}
         Nothing deployed yet. Pilo is listening{{if .Port}} on :{{.Port}}{{end}} and waiting for its first repo.

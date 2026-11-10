@@ -32,7 +32,7 @@ func TestPagesRender(t *testing.T) {
 	router.SetAdmin(handlers.Mux())
 
 	// 1. Unauthenticated access to index should redirect to /login
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/dashboard", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -94,7 +94,7 @@ func TestPagesRender(t *testing.T) {
 	}
 
 	// 4. Authenticated Index page (empty state)
-	req = httptest.NewRequest("GET", "/", nil)
+	req = httptest.NewRequest("GET", "/dashboard", nil)
 	req.AddCookie(sessionCookie)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -179,7 +179,7 @@ func TestPagesRender(t *testing.T) {
 	}
 
 	// 6. Index page (with projects)
-	req = httptest.NewRequest("GET", "/", nil)
+	req = httptest.NewRequest("GET", "/dashboard", nil)
 	req.AddCookie(sessionCookie)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -346,5 +346,25 @@ func TestPagesRender(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("expected redirect after logout, got %d", rec.Code)
+	}
+}
+
+func TestLandingAndNotFound(t *testing.T) {
+	st, router, _ := setupTestServer(t)
+	defer st.Close()
+
+	for _, tc := range []struct {
+		path     string
+		status   int
+		contains string
+	}{
+		{"/", http.StatusOK, "A little home for your websites."},
+		{"/missing/page", http.StatusNotFound, "Nothing here."},
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest("GET", tc.path, nil))
+		if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.contains) {
+			t.Errorf("GET %s: got status %d, expected %d and %q", tc.path, rec.Code, tc.status, tc.contains)
+		}
 	}
 }

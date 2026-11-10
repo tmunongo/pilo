@@ -4,7 +4,7 @@
 <main class="detail-screen" id="project-screen"{{if eq .Project.Status "cloning"}} hx-get="/projects/{{.Project.Slug}}" hx-trigger="every 1.5s" hx-select="#project-screen" hx-target="#project-screen" hx-swap="outerHTML"{{end}}>
   <div class="shell">
 
-    <a href="/" class="back-link">← projects</a>
+    <a href="/dashboard" class="back-link">← projects</a>
 
     <!-- Project title + status line -->
     <h1 class="project-title">{{.Project.Slug}}</h1>

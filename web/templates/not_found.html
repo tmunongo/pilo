@@ -1,0 +1,14 @@
+{{define "title"}}pilo · page not found{{end}}
+{{define "main"}}
+<main class="list-screen">
+  <div class="shell">
+    <p class="font-mono" style="font-size:13px; color:var(--muted); margin-bottom:24px;">404 / NOT FOUND</p>
+    <h1 class="page-title">Nothing here.</h1>
+    <p class="page-lead" style="margin-top:16px; max-width:480px;">We couldn't find the page you're looking for. It may have moved or the address may be incorrect.</p>
+    <div class="action-row" style="margin-top:32px;">
+      <a class="btn-primary" href="/">back to home →</a>
+      {{if .User}}<a class="btn-text" href="/dashboard">dashboard</a>{{end}}
+    </div>
+  </div>
+</main>
+{{end}}

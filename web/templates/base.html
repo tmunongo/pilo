@@ -680,7 +680,7 @@
       </a>
       <nav aria-label="Main navigation">
         {{if .User}}
-        <a href="/" class="nav-link{{if eq .ActiveNav "projects"}} nav-link--active{{end}}">projects</a>
+        <a href="/dashboard" class="nav-link{{if eq .ActiveNav "projects"}} nav-link--active{{end}}">projects</a>
         <a href="/settings" class="nav-link{{if eq .ActiveNav "settings"}} nav-link--active{{end}}">settings</a>
         <a href="/projects/new" class="btn-primary">new project</a>
         <form method="post" action="/logout" style="display:inline; margin-left: 8px;">

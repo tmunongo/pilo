@@ -132,6 +132,18 @@ func (h *Handlers) commonData(r *http.Request, activeNav string, extra map[strin
 	return data
 }
 
+// Landing serves the public introduction to Pilo.
+func (h *Handlers) Landing(w http.ResponseWriter, r *http.Request) {
+	render(w, h.Pages["landing"], h.commonData(r, "", nil))
+}
+
+// NotFound renders a consistent page for missing admin routes and projects.
+func (h *Handlers) NotFound(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	render(w, h.Pages["not_found"], h.commonData(r, "", nil))
+}
+
 // Mux builds the admin http.Handler with all routes registered.
 func (h *Handlers) Mux() http.Handler {
 	mux := http.NewServeMux()
@@ -151,7 +163,9 @@ func (h *Handlers) Mux() http.Handler {
 	mux.HandleFunc("GET /health", h.Health)
 
 	// Protected routes
-	mux.Handle("GET /{$}", h.requireAuth(http.HandlerFunc(h.Index)))
+	mux.HandleFunc("GET /{$}", h.Landing)
+	mux.HandleFunc("GET /", h.NotFound)
+	mux.Handle("GET /dashboard", h.requireAuth(http.HandlerFunc(h.Index)))
 	mux.Handle("GET /projects/new", h.requireAuth(http.HandlerFunc(h.NewForm)))
 	mux.Handle("POST /projects", h.requireAuth(http.HandlerFunc(h.Create)))
 	mux.Handle("GET /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Detail)))
@@ -208,7 +222,7 @@ func (h *Handlers) requireAuth(next http.Handler) http.Handler {
 
 func (h *Handlers) LoginForm(w http.ResponseWriter, r *http.Request) {
 	if userFromContext(r.Context()) != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
 	render(w, h.Pages["login"], h.commonData(r, "login", map[string]any{
@@ -247,12 +261,12 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("auth: login ok user=%s", email)
 	setSessionCookie(w, sess.ID)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (h *Handlers) SignUpForm(w http.ResponseWriter, r *http.Request) {
 	if userFromContext(r.Context()) != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
 	if h.IsSignupDisabled() {
@@ -321,7 +335,7 @@ func (h *Handlers) SignUp(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("auth: signup ok user=%s id=%s", email, u.ID)
 	setSessionCookie(w, sess.ID)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
@@ -608,7 +622,7 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	var deploys []deploy.CommitInfo
@@ -637,14 +651,14 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 
 	unlock := h.Deployer.Lock(p.CheckoutKey())
 	defer unlock()
 	if p = h.Store.GetForUser(slug, u.ID); p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	token := h.Store.ProjectToken(p)
@@ -674,13 +688,13 @@ func (h *Handlers) Rollback(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(r.PathValue("slug"), u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	unlock := h.Deployer.Lock(p.CheckoutKey())
 	defer unlock()
 	if h.Store.GetForUser(p.Slug, u.ID) == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	commit, err := h.Deployer.Rollback(p.CheckoutKey(), r.FormValue("release"))
@@ -701,7 +715,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	unlock := h.Deployer.Lock(p.CheckoutKey())
@@ -711,7 +725,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	_ = h.Store.DeleteForUser(slug, u.ID)
 
 	log.Printf("project: deleted slug=%s user=%s", slug, u.Email)
-	w.Header().Set("HX-Redirect", "/")
+	w.Header().Set("HX-Redirect", "/dashboard")
 }
 
 func (h *Handlers) EditForm(w http.ResponseWriter, r *http.Request) {
@@ -719,7 +733,7 @@ func (h *Handlers) EditForm(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	render(w, h.Pages["edit"], h.commonData(r, "", map[string]any{
@@ -737,7 +751,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	u := userFromContext(r.Context())
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 
@@ -780,7 +794,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 	p = h.Store.GetForUser(slug, u.ID)
 	if p == nil {
-		http.NotFound(w, r)
+		h.NotFound(w, r)
 		return
 	}
 	p.RepoHost = host

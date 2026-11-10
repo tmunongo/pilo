@@ -84,6 +84,8 @@ var funcMap = template.FuncMap{
 // defines its own {{define "content"}} and {{define "title"}} blocks —
 // parsing them all into one set would cause silent name collisions.
 var pageFiles = map[string]string{
+	"landing":         "templates/landing.html",
+	"not_found":       "templates/not_found.html",
 	"index":           "templates/index.html",
 	"new":             "templates/new.html",
 	"edit":            "templates/edit.html",

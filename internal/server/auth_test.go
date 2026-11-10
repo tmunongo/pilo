@@ -71,7 +71,7 @@ func TestAuthLoginForm(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
 		t.Errorf("expected 303 redirect to / for logged in user, got %d to %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
@@ -121,7 +121,7 @@ func TestAuthLoginAction(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
 		t.Fatalf("expected 303 redirect to / on valid login, got %d", rec.Code)
 	}
 
@@ -193,7 +193,7 @@ func TestAuthSignUpAction(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
 		t.Fatalf("expected 303 redirect to / after signup, got %d", rec.Code)
 	}
 
@@ -215,7 +215,7 @@ func TestAuthSignUpAction(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
 		t.Errorf("expected authenticated GET /signup to redirect to /")
 	}
 }

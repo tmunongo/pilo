@@ -199,7 +199,7 @@ Deploy to your production server:
 
 ## 🛠️ GitHub Webhooks Integration
 
-1. In Pilo's settings page (`/`), configure a **Webhook Secret**.
+1. In Pilo's settings page (`/settings`), configure a **Webhook Secret**.
 2. In your target GitHub repository, go to **Settings > Webhooks > Add webhook**.
 3. Set **Payload URL** to `https://pilo.yourdomain.com/webhooks/github` (or `http://your-server-ip:8080/webhooks/github`).
 4. Set **Content type** to `application/json`.
