@@ -97,7 +97,7 @@ func TestCrossTenantProjectIsolation(t *testing.T) {
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if loc := rec.Header().Get("HX-Redirect"); loc != "/dashboard" {
-		t.Errorf("expected HX-Redirect to / on successful delete, got %s", loc)
+		t.Errorf("expected HX-Redirect to /dashboard on successful delete, got %s", loc)
 	}
 	if st.Get("app-one") != nil {
 		t.Errorf("app-one was not deleted by its owner")

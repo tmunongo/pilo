@@ -62,7 +62,7 @@ func TestAuthLoginForm(t *testing.T) {
 		t.Errorf("expected notice in login HTML")
 	}
 
-	// 3. GET /login when already authenticated -> redirect to /
+	// 3. GET /login when already authenticated -> redirect to /dashboard
 	u, _ := st.CreateUser("logged@example.com", "password123")
 	sess, _ := st.CreateSession(u.ID, 1*time.Hour)
 
@@ -72,7 +72,7 @@ func TestAuthLoginForm(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
-		t.Errorf("expected 303 redirect to / for logged in user, got %d to %s", rec.Code, rec.Header().Get("Location"))
+		t.Errorf("expected 303 redirect to /dashboard for logged in user, got %d to %s", rec.Code, rec.Header().Get("Location"))
 	}
 }
 
@@ -122,7 +122,7 @@ func TestAuthLoginAction(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
-		t.Fatalf("expected 303 redirect to / on valid login, got %d", rec.Code)
+		t.Fatalf("expected 303 redirect to /dashboard on valid login, got %d", rec.Code)
 	}
 
 	var sessionCookie *http.Cookie
@@ -194,7 +194,7 @@ func TestAuthSignUpAction(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
-		t.Fatalf("expected 303 redirect to / after signup, got %d", rec.Code)
+		t.Fatalf("expected 303 redirect to /dashboard after signup, got %d", rec.Code)
 	}
 
 	// 4. Duplicate registration attempt
@@ -207,7 +207,7 @@ func TestAuthSignUpAction(t *testing.T) {
 		t.Errorf("expected duplicate email error on second registration attempt")
 	}
 
-	// 5. GET /signup when already authenticated redirects to /
+	// 5. GET /signup when already authenticated redirects to /dashboard
 	u, _ := st.GetUserByEmail("new@example.com")
 	sess, _ := st.CreateSession(u.ID, 1*time.Hour)
 	req = httptest.NewRequest("GET", "/signup", nil)
@@ -216,7 +216,7 @@ func TestAuthSignUpAction(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
-		t.Errorf("expected authenticated GET /signup to redirect to /")
+		t.Errorf("expected authenticated GET /signup to redirect to /dashboard")
 	}
 }
 

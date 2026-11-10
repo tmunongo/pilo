@@ -6,14 +6,14 @@
 
     <h1 class="page-title">Projects</h1>
 
-    <div id="projects-status"{{if .BuildingProject}} hx-get="/dashboard" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="innerHTML"{{end}}>
+    <div id="projects-status"{{if .BuildingProject}} hx-get="/dashboard?page={{.Page}}" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="outerHTML"{{end}}>
     <p class="page-lead" style="margin-top:16px;">
       {{if not .Projects}}
         Nothing deployed yet. Pilo is listening{{if .Port}} on :{{.Port}}{{end}} and waiting for its first repo.
-      {{else if eq (len .Projects) 1}}
+      {{else if eq .ProjectCount 1}}
         One site served from this machine.{{if .BuildingProject}} It is building right now.{{end}}
       {{else}}
-        {{len .Projects}} sites served from this machine.{{if .BuildingProject}} One is building right now.{{end}}
+        {{.ProjectCount}} sites served from this machine.{{if .BuildingProject}} One is building right now.{{end}}
       {{end}}
     </p>
 
@@ -57,6 +57,7 @@
     <div class="section-gap">
       <div class="table-scroll">
         <table class="projects-table" aria-label="Deployed projects">
+          <colgroup><col><col><col><col></colgroup>
           <thead>
             <tr>
               <th scope="col">domain</th>
@@ -72,6 +73,13 @@
           </tbody>
         </table>
       </div>
+      {{if gt .TotalPages 1}}
+      <nav class="pagination" aria-label="Project pages">
+        {{if gt .Page 1}}<a class="btn-text" href="/dashboard?page={{.PreviousPage}}">← previous</a>{{end}}
+        <span>page {{.Page}} of {{.TotalPages}}</span>
+        {{if lt .Page .TotalPages}}<a class="btn-text" href="/dashboard?page={{.NextPage}}">next →</a>{{end}}
+      </nav>
+      {{end}}
     </div>
 
     <!-- Webhook section -->

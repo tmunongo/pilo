@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -365,6 +366,46 @@ func TestLandingAndNotFound(t *testing.T) {
 		router.ServeHTTP(rec, httptest.NewRequest("GET", tc.path, nil))
 		if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.contains) {
 			t.Errorf("GET %s: got status %d, expected %d and %q", tc.path, rec.Code, tc.status, tc.contains)
+		}
+	}
+}
+
+func TestDashboardPagination(t *testing.T) {
+	st, router, _ := setupTestServer(t)
+	user, err := st.CreateUser("pages@example.com", "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := st.CreateSession(user.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 12; i++ {
+		slug := fmt.Sprintf("project-%02d", i)
+		status := store.StatusLive
+		if i == 0 {
+			status = store.StatusCloning
+		}
+		if err := st.Put(&store.Project{ID: slug, Slug: slug, UserID: user.ID, RepoOwner: "owner", RepoName: slug, Branch: "main", Status: status, CreatedAt: time.Now().Add(time.Duration(i) * time.Second)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ query, page, present, absent string }{
+		{"", "page 1 of 2", "project-00", "project-11"},
+		{"?page=2", "page 2 of 2", "project-11", "project-00"},
+		{"?page=999", "page 2 of 2", "project-11", "project-00"},
+		{"?page=bad", "page 1 of 2", "project-00", "project-11"},
+	} {
+		req := httptest.NewRequest("GET", "/dashboard"+tc.query, nil)
+		req.AddCookie(&http.Cookie{Name: "pilo_session", Value: session.ID})
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.Contains(body, tc.page) || !strings.Contains(body, tc.present) || strings.Contains(body, tc.absent) || !strings.Contains(body, "12 sites served") {
+			t.Errorf("dashboard%s: unexpected status or content: %d", tc.query, rec.Code)
+		}
+		if tc.query == "?page=2" && !strings.Contains(body, `hx-get="/dashboard?page=2"`) {
+			t.Error("polling should retain the current page")
 		}
 	}
 }

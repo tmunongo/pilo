@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -446,6 +447,21 @@ func (h *Handlers) Index(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	const pageSize = 10
+	total := len(projects)
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	} else if page > totalPages {
+		page = totalPages
+	}
+	start := (page - 1) * pageSize
+	end := min(start+pageSize, total)
+	pageProjects := projects[start:end]
 	var lastWebhookEvent string
 	if u != nil {
 		if latestLog, err := h.Store.LatestWebhookLogForUser(u.ID); err == nil && latestLog != nil {
@@ -453,7 +469,12 @@ func (h *Handlers) Index(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	render(w, h.Pages["index"], h.commonData(r, "projects", map[string]any{
-		"Projects":         projects,
+		"Projects":         pageProjects,
+		"ProjectCount":     total,
+		"Page":             page,
+		"TotalPages":       totalPages,
+		"PreviousPage":     page - 1,
+		"NextPage":         page + 1,
 		"BuildingProject":  building,
 		"LastWebhookEvent": lastWebhookEvent,
 	}))

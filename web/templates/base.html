@@ -276,24 +276,27 @@
       color: inherit;
     }
 
-    /* Projects table: 1.5fr 1.3fr 76px 124px, 16px gap */
+    /* Fixed table columns keep headers and rows aligned as names wrap. */
     .projects-table {
       min-width: 640px;
       width: 100%;
+      table-layout: fixed;
     }
 
-    .projects-table thead tr,
-    .projects-table tbody tr {
-      display: grid;
-      grid-template-columns: 1.5fr 1.3fr 76px 124px;
-      column-gap: 16px;
+    .projects-table col:nth-child(1) { width: 30%; }
+    .projects-table col:nth-child(2) { width: auto; }
+    .projects-table col:nth-child(3) { width: 76px; }
+    .projects-table col:nth-child(4) { width: 140px; }
+    .projects-table td { overflow-wrap: anywhere; }
+
+    .pagination {
+      display: flex;
       align-items: center;
-    }
-
-    .projects-table th,
-    .projects-table td {
-      overflow: hidden;
-      text-overflow: ellipsis;
+      gap: 20px;
+      margin-top: 20px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      color: var(--muted);
     }
 
     /* Domain cell: slightly larger */
