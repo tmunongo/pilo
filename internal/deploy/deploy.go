@@ -79,7 +79,10 @@ func runGit(dir string, args ...string) (string, error) {
 	return b.String(), err
 }
 
-type CommitInfo struct{ SHA, Message, When, ID string }
+type CommitInfo struct {
+	SHA, Message, When, ID string
+	CanRollback            bool
+}
 
 var releaseID = regexp.MustCompile(`^r_[0-9a-f]{32}$`)
 
@@ -249,6 +252,13 @@ func (d *Deployer) activate(key, id string) error {
 	if _, err := os.Stat(filepath.Join(d.releaseDir(key), id+".json")); err != nil {
 		return fmt.Errorf("release not found: %w", err)
 	}
+	info, err := os.Stat(filepath.Join(d.releaseDir(key), id))
+	if err != nil {
+		return fmt.Errorf("release snapshot unavailable: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("release snapshot is not a directory")
+	}
 	live := d.PathFor(key)
 	if err := os.MkdirAll(filepath.Dir(live), 0755); err != nil {
 		return err
@@ -281,6 +291,8 @@ func (d *Deployer) Rollback(key, id string) (string, error) {
 	}
 	return m.Commit, nil
 }
+
+// Commits returns deployment history newest first. A nonpositive limit returns all entries.
 func (d *Deployer) Commits(key string, limit int) []CommitInfo {
 	entries, err := os.ReadDir(d.releaseDir(key))
 	if err != nil {
@@ -306,15 +318,17 @@ func (d *Deployer) Commits(key string, limit int) []CommitInfo {
 		if len(sha) > 7 {
 			sha = sha[:7]
 		}
+		id := strings.TrimSuffix(e.Name(), ".json")
+		info, statErr := os.Stat(filepath.Join(d.releaseDir(key), id))
 		list = append(list, struct {
 			c CommitInfo
 			t time.Time
-		}{CommitInfo{SHA: sha, Message: m.Message, When: m.Created.Format(time.RFC3339), ID: strings.TrimSuffix(e.Name(), ".json")}, m.Created})
+		}{CommitInfo{SHA: sha, Message: m.Message, When: m.Created.Format(time.RFC3339), ID: id, CanRollback: statErr == nil && info.IsDir()}, m.Created})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].t.After(list[j].t) })
 	var out []CommitInfo
 	for i, v := range list {
-		if i >= limit {
+		if limit > 0 && i >= limit {
 			break
 		}
 		out = append(out, v.c)
@@ -322,14 +336,13 @@ func (d *Deployer) Commits(key string, limit int) []CommitInfo {
 	return out
 }
 func (d *Deployer) prune(key string) {
-	entries := d.Commits(key, 1000000)
+	entries := d.Commits(key, 0)
 	active, _ := os.Readlink(d.PathFor(key))
 	for i, e := range entries {
-		if i < retainedReleases || filepath.Base(active) == e.ID {
+		if i < retainedReleases || filepath.Base(active) == e.ID || !e.CanRollback {
 			continue
 		}
 		os.RemoveAll(filepath.Join(d.releaseDir(key), e.ID))
-		os.Remove(filepath.Join(d.releaseDir(key), e.ID+".json"))
 	}
 }
 func (d *Deployer) Remove(key string) error {
@@ -348,29 +361,51 @@ func (d *Deployer) Pull(key, branch, token string) (string, error) {
 	return d.Clone(key, string(b), branch, token)
 }
 
+func (d *Deployer) activeSiteRoot(key string) (string, error) {
+	target, err := os.Readlink(d.PathFor(key))
+	if err != nil {
+		return "", err
+	}
+	id := filepath.Base(target)
+	if !releaseID.MatchString(id) {
+		return "", fmt.Errorf("invalid release ID")
+	}
+	b, err := os.ReadFile(filepath.Join(d.releaseDir(key), id+".json"))
+	if err != nil {
+		return "", err
+	}
+	var m releaseMeta
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", err
+	}
+	if err := ValidateSubdir(m.Subdir); err != nil {
+		return "", err
+	}
+	return filepath.Join(d.releaseDir(key), id, m.Subdir), nil
+}
+
+// PublishWarning checks the active release's publish directory without blocking deployment.
+// A missing entry page is allowed for sites intentionally serving individual files.
+func (d *Deployer) PublishWarning(key string) string {
+	root, err := d.activeSiteRoot(key)
+	if err != nil {
+		return ""
+	}
+	info, err := os.Stat(filepath.Join(root, "index.html"))
+	if os.IsNotExist(err) || (err == nil && !info.Mode().IsRegular()) {
+		return "The active publish directory has no index.html entry page. Opening the site may show a directory listing. Check the publish directory in project settings, or commit your built site's output before redeploying."
+	}
+	return ""
+}
+
 // SiteHandler resolves the active snapshot and its associated subdirectory per request.
 func (d *Deployer) SiteHandler(key string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		target, err := os.Readlink(d.PathFor(key))
+		root, err := d.activeSiteRoot(key)
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		id := filepath.Base(target)
-		if !releaseID.MatchString(id) {
-			http.NotFound(w, r)
-			return
-		}
-		b, err := os.ReadFile(filepath.Join(d.releaseDir(key), id+".json"))
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		var m releaseMeta
-		if json.Unmarshal(b, &m) != nil || ValidateSubdir(m.Subdir) != nil {
-			http.NotFound(w, r)
-			return
-		}
-		http.FileServer(http.Dir(filepath.Join(d.releaseDir(key), id, m.Subdir))).ServeHTTP(w, r)
+		http.FileServer(http.Dir(root)).ServeHTTP(w, r)
 	})
 }

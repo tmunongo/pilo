@@ -21,32 +21,23 @@
     <!-- Empty state -->
     <div class="section-gap">
       <h2 class="section-heading">get started</h2>
-      <p class="section-prose" style="margin-top:8px;">Point a domain, add a webhook, and deploy your first repo.</p>
+      <p class="section-prose" style="margin-top:8px;">Deploy a repository to get your first site online. Public repositories need no access token.</p>
+      <p style="margin-top:24px;"><a href="/projects/new" class="btn-primary">deploy a repository</a></p>
 
       <ol class="steps">
         <li>
           <div>
-            <p>Point a domain at this machine's IP address.</p>
+            <p>Enter a GitHub, GitLab, or Codeberg repository and choose the branch to deploy.</p>
           </div>
         </li>
         <li>
           <div>
-            <p>Add the webhook URL to your GitHub repository.</p>
-            {{if .WebhookURL}}
-            <div style="margin-top:12px;">
-              <div class="webhook-box">
-                <code>{{.WebhookURL}}</code>
-                <button
-                  class="btn-text"
-                  onclick="navigator.clipboard.writeText('{{.WebhookURL}}').then(()=>{this.textContent='copied';setTimeout(()=>this.textContent='copy',2000)})">copy</button>
-              </div>
-            </div>
-            {{end}}
+            <p>Choose the publish directory containing your committed HTML, CSS, and JavaScript files. Leave it blank to serve the repository root.</p>
           </div>
         </li>
         <li>
           <div>
-            <p>Press <a href="/projects/new" class="btn-text">new project</a> to give Pilo the repo and domain.</p>
+            <p>Open your site from the project page once deployment finishes. You can set up automatic deployments for GitHub afterward.</p>
           </div>
         </li>
       </ol>
@@ -60,7 +51,7 @@
           <colgroup><col><col><col><col></colgroup>
           <thead>
             <tr>
-              <th scope="col">domain</th>
+              <th scope="col">project</th>
               <th scope="col">repo @ branch</th>
               <th scope="col">sha</th>
               <th scope="col">deployed</th>
@@ -86,7 +77,7 @@
     {{if .WebhookURL}}
     <div class="section-gap">
       <h2 class="section-heading">webhook</h2>
-      <p class="section-prose" style="margin-top:8px; margin-bottom:16px;">GitHub pushes to any tracked branch trigger a redeploy automatically.</p>
+      <p class="section-prose" style="margin-top:8px; margin-bottom:16px;">After configuring a GitHub webhook, pushes to the tracked branch trigger a redeploy. Setup instructions are on each GitHub project's page. For GitLab and Codeberg, use redeploy.</p>
       <div class="webhook-box">
         <code>{{.WebhookURL}}</code>
         <button

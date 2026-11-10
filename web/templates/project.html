@@ -1,7 +1,7 @@
 {{define "title"}}pilo · {{.Project.Slug}}{{end}}
 
 {{define "main"}}
-<main class="detail-screen" id="project-screen"{{if eq .Project.Status "cloning"}} hx-get="/projects/{{.Project.Slug}}" hx-trigger="every 1.5s" hx-select="#project-screen" hx-target="#project-screen" hx-swap="outerHTML"{{end}}>
+<main class="detail-screen" id="project-screen"{{if eq .Project.Status "cloning"}} hx-get="/projects/{{.Project.Slug}}?deploy_page={{.DeployPage}}" hx-trigger="every 1.5s" hx-select="#project-screen" hx-target="#project-screen" hx-swap="outerHTML"{{end}}>
   <div class="shell">
 
     <a href="/dashboard" class="back-link">← projects</a>
@@ -26,6 +26,10 @@
       {{end}}
     </div>
 
+    {{if .PublishWarning}}
+    <div class="notice notice--warn" style="margin-top:24px;" role="status">{{.PublishWarning}} <a href="/projects/{{.Project.Slug}}/edit" class="btn-text">edit project</a></div>
+    {{end}}
+
     <!-- Action row -->
     <div class="action-row" style="margin-top:24px;">
       <button
@@ -44,16 +48,16 @@
     <div class="section-gap kv-section">
       <dl class="kv-list">
         <dt>repo</dt>
-        <dd>{{.Project.RepoOwner}}/{{.Project.RepoName}}</dd>
+        <dd>{{.Project.RepoURL}}</dd>
         <dt>branch</dt>
         <dd>{{.Project.Branch}}</dd>
         {{if .Project.Subdir}}
-        <dt>subdir</dt>
+        <dt>publish directory</dt>
         <dd>{{.Project.Subdir}}</dd>
         {{end}}
         <dt>served from</dt>
         <dd>{{.Project.PublicPath}}</dd>
-        {{if .WebhookURL}}
+        {{if and .IsGitHub .WebhookURL}}
         <dt>webhook</dt>
         <dd>
           <span style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -66,6 +70,25 @@
         </dd>
         {{end}}
       </dl>
+    </div>
+
+    <div class="section-gap">
+      <h2 class="section-heading">automatic deployments</h2>
+      {{if .IsGitHub}}
+      {{if or (eq .Project.Status "live") .Project.LastCommit}}
+      <p class="section-prose" style="margin-top:8px;">To redeploy on pushes to <code>{{.Project.Branch}}</code>, add a webhook in your GitHub repository's Settings → Webhooks:</p>
+      <ol class="steps">
+        <li><div><p>Set a webhook secret in <a href="/settings" class="btn-text">Pilo settings</a>, then enter the same secret in GitHub.</p></div></li>
+        <li><div><p>Use the webhook URL above as the Payload URL, select <code>application/json</code>, and subscribe to push events.</p></div></li>
+      </ol>
+      {{if not .HasSecret}}<p class="section-prose">A webhook secret has not been configured for this account.</p>{{end}}
+      <p class="section-prose" role="status">{{.WebhookStatus}}</p>
+      {{else}}
+      <p class="section-prose" style="margin-top:8px;">After your first successful deployment, set up a GitHub webhook here to redeploy on pushes.</p>
+      {{end}}
+      {{else}}
+      <p class="section-prose" style="margin-top:8px;">Automatic deployments currently support GitHub only. For this {{.Project.RepoHost}} repository, use redeploy after pushing changes.</p>
+      {{end}}
     </div>
 
     <!-- Last deploy log block -->
@@ -85,7 +108,7 @@
     <!-- Deploys table -->
     {{if .Deploys}}
     <div class="section-gap">
-      <h2 class="section-heading">deploys</h2>
+      <h2 class="section-heading" id="deploys">deploys</h2>
       <div class="table-scroll" style="margin-top:16px;">
         <table class="deploys-table" aria-label="Deploy history">
           <colgroup><col><col><col><col></colgroup>
@@ -104,16 +127,27 @@
               <td>{{if .Message}}{{.Message}}{{else}}<span style="color:var(--muted);">message unavailable</span>{{end}}</td>
               <td>{{.When}}</td>
               <td class="deploy-action">
+                {{if .CanRollback}}
                 <form method="post" action="/projects/{{$.Project.Slug}}/rollback">
                   <input type="hidden" name="release" value="{{.ID}}">
                   <button type="submit" class="btn-text">rollback</button>
                 </form>
+                {{else}}
+                <span style="color:var(--muted);">snapshot removed</span>
+                {{end}}
               </td>
             </tr>
             {{end}}
           </tbody>
         </table>
       </div>
+      {{if gt .DeployTotalPages 1}}
+      <nav class="pagination" aria-label="Deployment pages">
+        {{if gt .DeployPage 1}}<a class="btn-text" href="/projects/{{.Project.Slug}}?deploy_page={{.DeployPreviousPage}}#deploys">← previous</a>{{end}}
+        <span>page {{.DeployPage}} of {{.DeployTotalPages}}</span>
+        {{if lt .DeployPage .DeployTotalPages}}<a class="btn-text" href="/projects/{{.Project.Slug}}?deploy_page={{.DeployNextPage}}#deploys">next →</a>{{end}}
+      </nav>
+      {{end}}
     </div>
     {{end}}
 

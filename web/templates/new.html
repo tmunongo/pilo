@@ -14,9 +14,9 @@
     {{end}}
 
     {{if not .HasToken}}
-    <div class="notice notice--warn" style="margin-top:32px;">
-      No default token set. Add a project token below for a private repository.
-      <a href="/settings" class="btn-text" style="font-size:inherit; font-family:inherit;">Add a token →</a>
+    <div class="notice" style="margin-top:32px;">
+      Public repositories need no access token. For a private repository, add a project token below or set a default in
+      <a href="/settings" class="btn-text" style="font-size:inherit; font-family:inherit;">settings</a>.
     </div>
     {{end}}
 
@@ -62,18 +62,20 @@
               spellcheck="false">
           </div>
           <div class="form-group">
-            <label for="subdir">subdirectory <span style="color:var(--muted);">(optional)</span></label>
+            <label for="subdir">publish directory <span style="color:var(--muted);">(optional)</span></label>
             <input
               id="subdir"
               name="subdir"
               type="text"
               class="form-input"
               value="{{.Form.subdir}}"
-              placeholder="e.g. site"
+              placeholder="repository root, or e.g. dist"
               spellcheck="false">
           </div>
         </div>
       </div>
+
+      <p class="section-prose" style="margin-top:16px;">Pilo serves committed files directly and does not run build commands. If your site needs a build, commit its output and select that folder as the publish directory. Leave blank to serve the repository root.</p>
 
       <div class="form-group" style="margin-top:24px;">
         <label for="access_token">project access token (optional)</label>

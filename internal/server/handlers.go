@@ -647,9 +647,21 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var deploys []deploy.CommitInfo
+	var publishWarning string
 	if h.Deployer != nil {
-		deploys = h.Deployer.Commits(p.CheckoutKey(), 5)
+		deploys = h.Deployer.Commits(p.CheckoutKey(), 0)
+		publishWarning = h.Deployer.PublishWarning(p.CheckoutKey())
 	}
+	const deployPageSize = 10
+	deployTotalPages := max(1, (len(deploys)+deployPageSize-1)/deployPageSize)
+	deployPage, err := strconv.Atoi(r.URL.Query().Get("deploy_page"))
+	if err != nil || deployPage < 1 {
+		deployPage = 1
+	} else if deployPage > deployTotalPages {
+		deployPage = deployTotalPages
+	}
+	deployStart := (deployPage - 1) * deployPageSize
+	pageDeploys := deploys[deployStart:min(deployStart+deployPageSize, len(deploys))]
 
 	webhookLogs, err := h.Store.WebhookLogsForProjectAndUser(p.Slug, u.ID, 10)
 	if err != nil {
@@ -657,13 +669,32 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		webhookLogs = nil
 	}
 	hasSecret := h.Store.EffectiveWebhookSecret(u.ID) != ""
-	hasWebhooks := hasSecret || len(webhookLogs) > 0
+	isGitHub := p.RepoHost == "" || p.RepoHost == "github.com"
+	webhookStatus := "Awaiting first delivery."
+	if len(webhookLogs) > 0 {
+		switch webhookLogs[0].Status {
+		case "success":
+			webhookStatus = "Latest delivery succeeded."
+		case "error":
+			webhookStatus = "Latest delivery failed. Check the webhook logs below."
+		default:
+			webhookStatus = "Latest delivery was ignored. Check the webhook logs below."
+		}
+	}
 
 	render(w, h.Pages["project"], h.commonData(r, "", map[string]any{
-		"Project":     p,
-		"Deploys":     deploys,
-		"WebhookLogs": webhookLogs,
-		"HasWebhooks": hasWebhooks,
+		"Project":            p,
+		"Deploys":            pageDeploys,
+		"DeployPage":         deployPage,
+		"DeployTotalPages":   deployTotalPages,
+		"DeployPreviousPage": deployPage - 1,
+		"DeployNextPage":     deployPage + 1,
+		"PublishWarning":     publishWarning,
+		"IsGitHub":           isGitHub,
+		"HasSecret":          hasSecret,
+		"WebhookStatus":      webhookStatus,
+		"WebhookLogs":        webhookLogs,
+		"HasWebhooks":        isGitHub && (hasSecret || len(webhookLogs) > 0),
 	}))
 }
 

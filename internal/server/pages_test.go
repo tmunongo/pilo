@@ -1,10 +1,12 @@
 package server_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -347,6 +349,150 @@ func TestPagesRender(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("expected redirect after logout, got %d", rec.Code)
+	}
+}
+
+func TestDeploymentHistoryPagination(t *testing.T) {
+	for _, count := range []int{0, 10, 11, 21} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			st, router, handlers := setupTestServer(t)
+			u, err := st.CreateUser("history@example.com", "password123")
+			if err != nil {
+				t.Fatal(err)
+			}
+			sess, err := st.CreateSession(u.ID, time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := &store.Project{Slug: "history", UserID: u.ID, RepoOwner: "owner", RepoName: "site", Status: store.StatusCloning}
+			if err := st.Put(p); err != nil {
+				t.Fatal(err)
+			}
+			root := filepath.Join(handlers.Deployer.ReposRoot, ".releases", p.CheckoutKey())
+			if err := os.MkdirAll(root, 0755); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < count; i++ {
+				id := fmt.Sprintf("r_%032x", i)
+				meta, err := json.Marshal(map[string]any{"Commit": fmt.Sprintf("%040x", i), "Created": time.Unix(int64(i), 0), "Message": fmt.Sprintf("deploy-message-%02d", i)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(root, id+".json"), meta, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if i >= count-5 {
+					if err := os.Mkdir(filepath.Join(root, id), 0755); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			totalPages := max(1, (count+9)/10)
+			for _, tc := range []struct {
+				query string
+				page  int
+			}{
+				{"", 1}, {"abc", 1}, {"-1", 1}, {"0", 1},
+				{"2", min(2, totalPages)}, {"3", min(3, totalPages)}, {"999", totalPages},
+				{"999999999999999999999999999999", 1},
+			} {
+				req := httptest.NewRequest(http.MethodGet, "/projects/history?deploy_page="+tc.query, nil)
+				req.AddCookie(&http.Cookie{Name: "pilo_session", Value: sess.ID})
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+				body := rec.Body.String()
+				if rec.Code != http.StatusOK {
+					t.Fatalf("query=%q returned %d: %s", tc.query, rec.Code, body)
+				}
+				start := (tc.page - 1) * 10
+				end := min(start+10, count)
+				if got := strings.Count(body, "deploy-message-"); got != end-start {
+					t.Errorf("query=%q: expected %d rows, got %d", tc.query, end-start, got)
+				}
+				for i := 0; i < count; i++ {
+					position := count - 1 - i
+					want := position >= start && position < end
+					if strings.Contains(body, fmt.Sprintf("deploy-message-%02d", i)) != want {
+						t.Errorf("query=%q: deployment %d on wrong page", tc.query, i)
+					}
+				}
+				if strings.Contains(body, `aria-label="Deployment pages"`) != (totalPages > 1) {
+					t.Errorf("query=%q: pagination should only appear above 10 deployments", tc.query)
+				}
+				if !strings.Contains(body, fmt.Sprintf(`hx-get="/projects/history?deploy_page=%d"`, tc.page)) {
+					t.Errorf("query=%q: polling must preserve the current page", tc.query)
+				}
+				if totalPages > 1 && !strings.Contains(body, fmt.Sprintf("page %d of %d", tc.page, totalPages)) {
+					t.Errorf("query=%q: wrong page indicator", tc.query)
+				}
+				if tc.page > 1 && !strings.Contains(body, fmt.Sprintf(`href="/projects/history?deploy_page=%d#deploys"`, tc.page-1)) {
+					t.Errorf("query=%q: missing previous link", tc.query)
+				}
+				if tc.page < totalPages && !strings.Contains(body, fmt.Sprintf(`href="/projects/history?deploy_page=%d#deploys"`, tc.page+1)) {
+					t.Errorf("query=%q: missing next link", tc.query)
+				}
+				wantRollback := 0
+				if tc.page == 1 {
+					wantRollback = min(count, 5)
+				}
+				if got := strings.Count(body, `action="/projects/history/rollback"`); got != wantRollback {
+					t.Errorf("query=%q: expected %d available rollback actions, got %d", tc.query, wantRollback, got)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectWebhookGuidance(t *testing.T) {
+	st, router, _ := setupTestServer(t)
+	defer st.Close()
+	u, err := st.CreateUser("guidance@example.com", "password123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := st.CreateSession(u.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserSetting(u.ID, "webhook_secret", "configured-secret"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		slug, host, logStatus, want string
+	}{
+		{"legacy", "", "", "Awaiting first delivery."},
+		{"github", "github.com", "success", "Latest delivery succeeded."},
+		{"failed-hook", "github.com", "error", "Latest delivery failed."},
+		{"ignored-hook", "github.com", "ignored", "Latest delivery was ignored."},
+		{"gitlab", "gitlab.com", "", "For this gitlab.com repository, use redeploy"},
+		{"codeberg", "codeberg.org", "", "For this codeberg.org repository, use redeploy"},
+	} {
+		t.Run(tc.slug, func(t *testing.T) {
+			p := &store.Project{Slug: tc.slug, UserID: u.ID, RepoHost: tc.host, RepoOwner: "owner", RepoName: "site", Branch: "main", Status: store.StatusLive}
+			if err := st.Put(p); err != nil {
+				t.Fatal(err)
+			}
+			if tc.logStatus != "" {
+				if err := st.CreateWebhookLog(&store.WebhookLog{ProjectSlug: tc.slug, UserID: u.ID, Event: "ping", Status: tc.logStatus}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			req := httptest.NewRequest(http.MethodGet, "/projects/"+tc.slug, nil)
+			req.AddCookie(&http.Cookie{Name: "pilo_session", Value: sess.ID})
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			body := rec.Body.String()
+			if rec.Code != http.StatusOK || !strings.Contains(body, tc.want) {
+				t.Fatalf("expected guidance %q, got status %d, body %s", tc.want, rec.Code, body)
+			}
+			isGitHub := tc.host == "" || tc.host == "github.com"
+			if strings.Contains(body, "/webhooks/github") != isGitHub {
+				t.Error("GitHub webhook endpoint should only appear for GitHub projects")
+			}
+			if !isGitHub && strings.Contains(body, "webhook logs") {
+				t.Error("account webhook secret should not enable webhook logs for other providers")
+			}
+		})
 	}
 }
 

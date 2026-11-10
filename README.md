@@ -72,6 +72,8 @@ Open `http://localhost:8080` in your browser. Add an optional default access tok
 
 Use `owner/repo` for GitHub, or an HTTPS repository URL for GitHub, GitLab.com, or Codeberg. GitLab subgroup paths are supported. Automatic webhook deployments currently support GitHub only; use the redeploy button for GitLab and Codeberg projects.
 
+Pilo serves committed files directly without running build commands. Leave the publish directory blank to serve the repository root, or select a folder containing your committed build output (for example, `dist`). The project page warns if the active publish directory has no `index.html`; deployment still succeeds for projects that intentionally serve individual files. After your first successful GitHub deployment, follow the webhook setup instructions on the project page to enable automatic redeploys.
+
 ---
 
 ## 🏷️ Versioning & Automated Releases
@@ -246,7 +248,7 @@ Management URLs remain `/projects/<project-slug>` and require the owning account
 Project slugs are unique per account. Active release links live at
 `PILO_DATA_DIR/repos/<user UUID>/<project-slug>` and stay there when usernames change.
 
-Deployments reject symlinks and files over 50 MiB, releases over 500 MiB, or more than 10,000 files. Five recent releases are retained for rollback from the project page. Git fetches run as the Pilo process user; isolate the service and apply storage quotas when repositories are untrusted.
+Deployments reject symlinks and files over 50 MiB, releases over 500 MiB, or more than 10,000 files. Five recent release snapshots are retained for rollback from the project page; an older active snapshot is also preserved. Deployment history records remain available and are paginated at 10 rows per page. Entries whose snapshots have been removed are shown without a rollback action. Previously deleted history cannot be recovered. Git fetches run as the Pilo process user; isolate the service and apply storage quotas when repositories are untrusted.
 
 On the first startup after upgrading from checkout-based deployments, Pilo
 converts each existing checkout's committed `HEAD` to a release. Stop the old
