@@ -10,8 +10,24 @@ import (
 	"testing"
 	"time"
 
+	"pilo/internal/server"
 	"pilo/internal/store"
 )
+
+func TestManagementRouteDoesNotInheritPublicCachePolicy(t *testing.T) {
+	router := server.NewRouter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	router.SetNamespaceResolver(func(string) string { return "user-id" })
+	router.RegisterProject("user-id/edit", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("management route dispatched to project")
+	}))
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/projects/user/edit", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Errorf("management route cache policy = %q", got)
+	}
+}
 
 func TestCrossTenantProjectIsolation(t *testing.T) {
 	st, router, _ := setupTestServer(t)
@@ -194,6 +210,9 @@ func TestPublicStaticRouteServing(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "Hello from static tool") {
 		t.Errorf("expected static site content, got: %s", rec.Body.String())
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "public, no-cache" {
+		t.Errorf("expected public revalidation policy, got %q", got)
+	}
 
 	// Unregister project and verify it returns to admin 404 (or login redirect)
 	router.UnregisterProject(u.ID + "/my-public-app")
@@ -203,6 +222,9 @@ func TestPublicStaticRouteServing(t *testing.T) {
 	// Without route, admin mux receives it and unauthenticated access redirects to /login
 	if rec2.Code != http.StatusSeeOther && rec2.Code != http.StatusNotFound {
 		t.Errorf("expected redirect or 404 after unregister, got %d", rec2.Code)
+	}
+	if got := rec2.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Errorf("expected uncached policy after unregister, got %q", got)
 	}
 }
 

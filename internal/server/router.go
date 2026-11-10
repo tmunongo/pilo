@@ -73,6 +73,7 @@ func (r *Router) UnregisterProject(slug string) {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	parts := strings.SplitN(strings.TrimPrefix(req.URL.Path, "/"), "/", 4)
 	r.mu.RLock()
 	resolver := r.namespaceUserID
@@ -90,6 +91,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				admin.ServeHTTP(w, req)
 				return
 			}
+			w.Header().Set("Cache-Control", "public, no-cache")
 			if req.URL.Path == prefix {
 				http.Redirect(w, req, prefix+"/"+querySuffix(req), http.StatusMovedPermanently)
 				return
