@@ -305,7 +305,7 @@ func (q *Queries) GetLatestWebhookLogForUser(ctx context.Context, userID string)
 }
 
 const getProjectBySlug = `-- name: GetProjectBySlug :one
-SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, source_type, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE slug = ?
 LIMIT 1
 `
@@ -317,6 +317,7 @@ func (q *Queries) GetProjectBySlug(ctx context.Context, slug string) (Project, e
 		&i.ID,
 		&i.Slug,
 		&i.UserID,
+		&i.SourceType,
 		&i.RepoHost,
 		&i.AccessToken,
 		&i.RepoOwner,
@@ -333,7 +334,7 @@ func (q *Queries) GetProjectBySlug(ctx context.Context, slug string) (Project, e
 }
 
 const getProjectBySlugAndUserID = `-- name: GetProjectBySlugAndUserID :one
-SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, source_type, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE slug = ? AND user_id = ?
 LIMIT 1
 `
@@ -350,6 +351,7 @@ func (q *Queries) GetProjectBySlugAndUserID(ctx context.Context, arg GetProjectB
 		&i.ID,
 		&i.Slug,
 		&i.UserID,
+		&i.SourceType,
 		&i.RepoHost,
 		&i.AccessToken,
 		&i.RepoOwner,
@@ -476,7 +478,7 @@ func (q *Queries) GetUserSetting(ctx context.Context, arg GetUserSettingParams) 
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, source_type, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 ORDER BY created_at ASC
 `
 
@@ -493,6 +495,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 			&i.ID,
 			&i.Slug,
 			&i.UserID,
+			&i.SourceType,
 			&i.RepoHost,
 			&i.AccessToken,
 			&i.RepoOwner,
@@ -519,7 +522,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 const listProjectsByUserID = `-- name: ListProjectsByUserID :many
-SELECT id, slug, user_id, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
+SELECT id, slug, user_id, source_type, repo_host, access_token, repo_owner, repo_name, branch, subdir, status, last_commit, last_error, created_at, updated_at FROM projects
 WHERE user_id = ?
 ORDER BY created_at ASC
 `
@@ -537,6 +540,7 @@ func (q *Queries) ListProjectsByUserID(ctx context.Context, userID string) ([]Pr
 			&i.ID,
 			&i.Slug,
 			&i.UserID,
+			&i.SourceType,
 			&i.RepoHost,
 			&i.AccessToken,
 			&i.RepoOwner,
@@ -807,10 +811,11 @@ func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) 
 
 const upsertProject = `-- name: UpsertProject :exec
 INSERT INTO projects (
-    id, slug, user_id, repo_owner, repo_name, branch, subdir, repo_host, access_token,
+    id, slug, user_id, source_type, repo_owner, repo_name, branch, subdir, repo_host, access_token,
     status, last_commit, last_error, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
+    source_type = excluded.source_type,
     slug        = excluded.slug,
     user_id     = excluded.user_id,
     repo_host   = excluded.repo_host,
@@ -829,6 +834,7 @@ type UpsertProjectParams struct {
 	ID          string    `json:"id"`
 	Slug        string    `json:"slug"`
 	UserID      string    `json:"user_id"`
+	SourceType  string    `json:"source_type"`
 	RepoOwner   string    `json:"repo_owner"`
 	RepoName    string    `json:"repo_name"`
 	Branch      string    `json:"branch"`
@@ -847,6 +853,7 @@ func (q *Queries) UpsertProject(ctx context.Context, arg UpsertProjectParams) er
 		arg.ID,
 		arg.Slug,
 		arg.UserID,
+		arg.SourceType,
 		arg.RepoOwner,
 		arg.RepoName,
 		arg.Branch,

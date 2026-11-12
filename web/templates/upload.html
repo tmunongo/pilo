@@ -1,0 +1,82 @@
+{{define "title"}}pilo · upload{{end}}
+{{define "main"}}
+<main class="detail-screen"><div class="shell">
+  <a href="{{if .Project}}/projects/{{.Project.Slug}}{{else}}/projects/new{{end}}" class="back-link">← {{if .Project}}project{{else}}new project{{end}}</a>
+  <h1 class="page-title">{{if .Project}}Upload new version of {{.Project.Slug}}{{else}}Upload a site{{end}}</h1>
+  <p class="page-lead" style="margin-top:16px;">Drop one HTML file or ZIP containing your built static site.</p>
+  {{if .Project}}<p class="section-prose" style="margin-top:16px;">This replaces all files in the site. Your current version keeps serving until validation and publication succeed. Retained versions remain available for rollback.</p>{{end}}
+  <div id="upload-error" class="notice notice--error" role="alert" style="margin-top:24px;" {{if not .Error}}hidden{{end}}>{{.Error}}</div>
+  <form id="upload-form" method="post" action="{{.UploadAction}}" enctype="multipart/form-data">
+    <div id="upload-drop" class="kv-section section-gap" style="padding:24px;border:2px dashed var(--muted);border-radius:8px;">
+      <label for="upload-file">Drop a file here, or choose a file</label>
+      <input id="upload-file" name="file" type="file" accept=".html,.htm,.zip" required style="display:block;margin-top:16px;max-width:100%;">
+      <p id="upload-filename" class="section-prose" style="margin-top:12px;">Up to 50 MiB uploaded; 50 MiB per file, 500 MiB extracted, and 10,000 ZIP entries. ZIP64 and encrypted archives are unsupported.</p>
+    </div>
+    {{if not .Project}}<div class="form-group" style="margin-top:24px;">
+      <label for="upload-slug">project slug</label>
+      <input id="upload-slug" name="slug" class="form-input" value="{{.Form.slug}}" pattern="[a-z0-9-]+" required autocomplete="off" placeholder="my-site">
+    </div>{{end}}
+    <div class="form-group" style="margin-top:24px;">
+      <label for="upload-subdir">publish directory (optional)</label>
+      <input id="upload-subdir" name="subdir" class="form-input" value="{{.Form.subdir}}" placeholder="auto-detect site root, or e.g. dist" autocomplete="off">
+      <p class="section-prose">An index.html is required here. Leave blank for a single HTML file. For ZIPs, an enclosing folder is detected automatically. Upload built output; Pilo does not run build commands.</p>
+    </div>
+    <p id="upload-status" role="status" aria-live="polite" class="section-prose" style="margin-top:24px;"></p>
+    <button id="upload-submit" type="submit" class="btn-primary" style="margin-top:16px;">upload &amp; deploy</button>
+  </form>
+</div></main>
+<script>
+(() => {
+ const form = document.getElementById('upload-form');
+ const file = document.getElementById('upload-file');
+ const drop = document.getElementById('upload-drop');
+ const error = document.getElementById('upload-error');
+ const status = document.getElementById('upload-status');
+ const button = document.getElementById('upload-submit');
+ const slug = document.getElementById('upload-slug');
+ let busy = false;
+ function selected() {
+  const chosen = file.files[0];
+  if (!chosen) return;
+  document.getElementById('upload-filename').textContent = chosen.name;
+  if (slug && !slug.value) slug.value = chosen.name.replace(/\.(html?|zip)$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+ }
+ file.addEventListener('change', selected);
+ drop.addEventListener('dragover', e => { e.preventDefault(); if (!busy) drop.style.borderColor = 'currentColor'; });
+ drop.addEventListener('dragleave', () => { drop.style.borderColor = ''; });
+ drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.style.borderColor = '';
+  if (busy) return;
+  if (e.dataTransfer.files.length !== 1) { error.textContent = 'Choose exactly one HTML file or ZIP archive.'; error.hidden = false; return; }
+  file.files = e.dataTransfer.files; selected();
+ });
+ form.addEventListener('submit', e => {
+  e.preventDefault();
+  if (busy) return;
+  error.hidden = true;
+  const data = new FormData(form);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', form.action);
+  xhr.timeout = 150000;
+  busy = true; button.disabled = true; file.disabled = true;
+  status.textContent = 'Uploading…';
+  xhr.upload.onprogress = e => { status.textContent = e.lengthComputable ? 'Uploading ' + Math.round(e.loaded / e.total * 100) + '%…' : 'Uploading…'; };
+  xhr.upload.onload = () => { status.textContent = 'Validating and publishing…'; };
+  function failed(message) {
+   error.textContent = message; error.hidden = false;
+   status.textContent = ''; busy = false; button.disabled = false; file.disabled = false;
+  }
+  xhr.onload = () => {
+   if (xhr.status >= 200 && xhr.status < 300 && !xhr.responseURL.includes('/login')) { window.location.assign(xhr.responseURL); return; }
+   const page = new DOMParser().parseFromString(xhr.responseText, 'text/html');
+   const message = page.getElementById('upload-error');
+   failed(message ? message.textContent : 'Upload could not be completed. Check your sign-in and try again.');
+  };
+  xhr.onerror = () => failed('Connection lost. Check the project page to see whether publication completed before retrying.');
+  xhr.ontimeout = () => failed('Upload timed out. Check the project page before retrying with a smaller file.');
+  xhr.send(data);
+ });
+})();
+</script>
+{{end}}
+{{define "footer"}}<p>pilo{{if .Version}} · {{.Version}}{{end}}</p>{{end}}

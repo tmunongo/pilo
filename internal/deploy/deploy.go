@@ -1,4 +1,4 @@
-// Package deploy publishes validated, immutable snapshots of Git repositories.
+// Package deploy publishes validated, immutable snapshots from Git and uploads.
 package deploy
 
 import (
@@ -182,18 +182,32 @@ func (d *Deployer) publish(key, repo, ref, subdir string) (string, error) {
 		return "", fmt.Errorf("site subdirectory %q does not exist in release", subdir)
 	}
 	meta := releaseMeta{Commit: commit, Message: message, Created: time.Now().UTC(), Subdir: subdir}
-	b, _ := json.Marshal(meta)
-	if err = os.WriteFile(filepath.Join(root, id+".json"), b, 0600); err != nil {
-		return "", err
-	}
-	if err = d.activate(key, id); err != nil {
-		os.Remove(filepath.Join(root, id+".json"))
+	if err = d.finishRelease(key, id, meta); err != nil {
 		return "", err
 	}
 	success = true
-	d.prune(key)
 	return commit, nil
 }
+
+// finishRelease is the common activation boundary for Git and uploaded snapshots.
+// Callers hold the project lock and remove the snapshot on failure.
+func (d *Deployer) finishRelease(key, id string, meta releaseMeta) error {
+	root := d.releaseDir(key)
+	b, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	if err = os.WriteFile(filepath.Join(root, id+".json"), b, 0600); err != nil {
+		return err
+	}
+	if err = d.activate(key, id); err != nil {
+		os.Remove(filepath.Join(root, id+".json"))
+		return err
+	}
+	d.prune(key)
+	return nil
+}
+
 func extract(r io.Reader, dest string) error {
 	tr := tar.NewReader(r)
 	var total int64
@@ -361,27 +375,42 @@ func (d *Deployer) Pull(key, branch, token string) (string, error) {
 	return d.Clone(key, string(b), branch, token)
 }
 
-func (d *Deployer) activeSiteRoot(key string) (string, error) {
+// ActiveRelease returns the content identifier and publish directory stored in
+// the active snapshot, which remains authoritative across rollback and restart.
+func (d *Deployer) ActiveRelease(key string) (string, string, error) {
+	_, meta, err := d.activeRelease(key)
+	return meta.Commit, meta.Subdir, err
+}
+
+func (d *Deployer) activeRelease(key string) (string, releaseMeta, error) {
+	var meta releaseMeta
 	target, err := os.Readlink(d.PathFor(key))
 	if err != nil {
-		return "", err
+		return "", meta, err
 	}
 	id := filepath.Base(target)
 	if !releaseID.MatchString(id) {
-		return "", fmt.Errorf("invalid release ID")
+		return "", meta, fmt.Errorf("invalid release ID")
 	}
 	b, err := os.ReadFile(filepath.Join(d.releaseDir(key), id+".json"))
 	if err != nil {
+		return "", meta, err
+	}
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return "", meta, err
+	}
+	if err := ValidateSubdir(meta.Subdir); err != nil {
+		return "", meta, err
+	}
+	return id, meta, nil
+}
+
+func (d *Deployer) activeSiteRoot(key string) (string, error) {
+	id, meta, err := d.activeRelease(key)
+	if err != nil {
 		return "", err
 	}
-	var m releaseMeta
-	if err := json.Unmarshal(b, &m); err != nil {
-		return "", err
-	}
-	if err := ValidateSubdir(m.Subdir); err != nil {
-		return "", err
-	}
-	return filepath.Join(d.releaseDir(key), id, m.Subdir), nil
+	return filepath.Join(d.releaseDir(key), id, meta.Subdir), nil
 }
 
 // PublishWarning checks the active release's publish directory without blocking deployment.

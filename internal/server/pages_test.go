@@ -228,7 +228,7 @@ func TestPagesRender(t *testing.T) {
 		t.Fatalf("new project page returned status %d", rec.Code)
 	}
 	body = rec.Body.String()
-	if !strings.Contains(body, "Clone a Git repository") {
+	if !strings.Contains(body, "Deploy a Git repository") || !strings.Contains(body, `href="/uploads/new"`) {
 		t.Errorf("expected new project page lead, got: %s", body)
 	}
 

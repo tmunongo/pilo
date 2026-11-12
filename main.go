@@ -56,6 +56,8 @@ func main() {
 		log.Fatalf("migrating project releases: %v", err)
 	}
 
+	recoverUploadProjects(st, dep)
+
 	router := server.NewRouter(nil) // admin handler wired in below
 	handlers := server.NewHandlers(st, dep, router, baseURL)
 	handlers.Port = port
@@ -94,5 +96,28 @@ func main() {
 	log.Printf("pilo listening on %s (data dir: %s)", addr, dataDir)
 	if err := http.ListenAndServe(addr, router); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func recoverUploadProjects(st *store.Store, dep *deploy.Deployer) {
+	for _, p := range st.All() {
+		// Upload publication switches the filesystem pointer before updating the
+		// database. Recover that metadata if a process stopped between those steps.
+		if p.IsUpload() {
+			commit, subdir, activeErr := dep.ActiveRelease(p.CheckoutKey())
+			if activeErr == nil {
+				if p.LastCommit != commit || p.Subdir != subdir || p.Status != store.StatusLive {
+					p.LastCommit, p.Subdir, p.Status, p.LastError = commit, subdir, store.StatusLive, ""
+					if err := st.Put(p); err != nil {
+						log.Printf("recovering upload %s: %v", p.Slug, err)
+					}
+				}
+			} else if p.Status == store.StatusCloning {
+				p.Status, p.LastError = store.StatusError, "Upload interrupted. Upload a new version to deploy."
+				if err := st.Put(p); err != nil {
+					log.Printf("recovering interrupted upload %s: %v", p.Slug, err)
+				}
+			}
+		}
 	}
 }

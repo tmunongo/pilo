@@ -22,6 +22,7 @@ type Project struct {
 	ID          string    `json:"id"`
 	Slug        string    `json:"slug"`
 	UserID      string    `json:"user_id"`
+	SourceType  string    `json:"source_type"`
 	RepoHost    string    `json:"repo_host"`
 	AccessToken string    `json:"access_token"`
 	RepoOwner   string    `json:"repo_owner"`

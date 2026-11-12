@@ -7,7 +7,10 @@
     <a href="/dashboard" class="back-link">← projects</a>
 
     <h1 class="page-title">New project</h1>
-    <p class="page-lead" style="margin-top:16px;">Clone a Git repository and serve it as a static site.</p>
+    <p class="page-lead" style="margin-top:16px;">Deploy a Git repository, or upload an HTML file or ZIP.</p>
+
+    <p style="margin-top:24px;"><a href="/uploads/new" class="btn-primary">upload HTML or ZIP</a></p>
+    <h2 class="section-heading" style="margin-top:32px;">deploy from Git</h2>
 
     {{if .Error}}
     <div class="notice notice--error" style="margin-top:32px;">{{.Error}}</div>

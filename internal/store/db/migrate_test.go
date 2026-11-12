@@ -56,9 +56,12 @@ func TestLegacyNamespaceMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var id, owner, repo, commit string
-	if err := conn.QueryRow(`SELECT id,user_id,repo_owner,last_commit FROM projects WHERE slug='app'`).Scan(&id, &owner, &repo, &commit); err != nil {
+	var id, owner, repo, commit, source string
+	if err := conn.QueryRow(`SELECT id,user_id,repo_owner,last_commit,source_type FROM projects WHERE slug='app'`).Scan(&id, &owner, &repo, &commit, &source); err != nil {
 		t.Fatal(err)
+	}
+	if source != "git" {
+		t.Fatal("legacy project did not default to Git")
 	}
 	if id != "legacy-id" || owner != "owner" || repo != "octocat" || commit != "abc123" {
 		t.Fatal("legacy data changed")

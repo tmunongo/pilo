@@ -85,10 +85,11 @@ LIMIT 1;
 
 -- name: UpsertProject :exec
 INSERT INTO projects (
-    id, slug, user_id, repo_owner, repo_name, branch, subdir, repo_host, access_token,
+    id, slug, user_id, source_type, repo_owner, repo_name, branch, subdir, repo_host, access_token,
     status, last_commit, last_error, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
+    source_type = excluded.source_type,
     slug        = excluded.slug,
     user_id     = excluded.user_id,
     repo_host   = excluded.repo_host,

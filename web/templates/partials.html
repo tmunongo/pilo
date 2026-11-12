@@ -4,7 +4,7 @@
     <a href="/projects/{{.Slug}}" style="display:block;">{{.Slug}}</a>
   </td>
   <td>
-    <a href="/projects/{{.Slug}}" style="display:block;">{{.RepoOwner}}/{{.RepoName}} @ {{.Branch}}</a>
+    <a href="/projects/{{.Slug}}" style="display:block;">{{if .IsUpload}}HTML / ZIP upload{{else}}{{.RepoOwner}}/{{.RepoName}} @ {{.Branch}}{{end}}</a>
   </td>
   <td>
     <a href="/projects/{{.Slug}}" style="display:block;">

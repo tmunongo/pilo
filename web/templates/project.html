@@ -32,25 +32,33 @@
 
     <!-- Action row -->
     <div class="action-row" style="margin-top:24px;">
+      {{if .Project.IsUpload}}
+      <a href="/projects/{{.Project.Slug}}/upload" class="btn-primary">upload new version</a>
+      {{else}}
       <button
         class="btn-primary"
         hx-post="/projects/{{.Project.Slug}}/redeploy">redeploy</button>
       <a href="/projects/{{.Project.Slug}}/edit" class="btn-text">edit</a>
+      {{end}}
       <a href="{{.Project.PublicPath}}" target="_blank" class="btn-text">open site</a>
       <button
         class="btn-text btn-text--muted"
         hx-delete="/projects/{{.Project.Slug}}"
-        hx-confirm="Delete &quot;{{.Project.Slug}}&quot;? This removes the local checkout too."
+        hx-confirm="Delete &quot;{{.Project.Slug}}&quot;? This removes all retained releases too."
         hx-target="body">delete project</button>
     </div>
 
     <!-- Key-value details -->
     <div class="section-gap kv-section">
       <dl class="kv-list">
+        {{if .Project.IsUpload}}
+        <dt>source</dt><dd>HTML / ZIP upload</dd>
+        {{else}}
         <dt>repo</dt>
         <dd>{{.Project.RepoURL}}</dd>
         <dt>branch</dt>
         <dd>{{.Project.Branch}}</dd>
+        {{end}}
         {{if .Project.Subdir}}
         <dt>publish directory</dt>
         <dd>{{.Project.Subdir}}</dd>
@@ -72,6 +80,7 @@
       </dl>
     </div>
 
+    {{if not .Project.IsUpload}}
     <div class="section-gap">
       <h2 class="section-heading">automatic deployments</h2>
       {{if .IsGitHub}}
@@ -91,10 +100,14 @@
       {{end}}
     </div>
 
+    {{end}}
+
     <!-- Last deploy log block -->
     <div class="section-gap">
       <h2 class="section-heading">last deploy</h2>
-      {{if .Project.LastError}}
+      {{if .Project.IsUpload}}
+      <div class="log-block" style="margin-top:16px;">{{if .Project.LastError}}{{.Project.LastError}}{{else if .Project.LastCommit}}Validated upload published. Serving at {{.Project.PublicPath}}{{else}}Awaiting a successful upload.{{end}}</div>
+      {{else if .Project.LastError}}
       <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     error: {{.Project.LastError}}</div>
       {{else if eq .Project.Status "cloning"}}
       <div class="log-block" style="margin-top:16px;" role="log" aria-label="Deploy log">{{.Project.UpdatedAt.Format "15:04:05"}}  git     cloning {{.Project.RepoOwner}}/{{.Project.RepoName}} ({{.Project.Branch}})…</div>
@@ -114,8 +127,8 @@
           <colgroup><col><col><col><col></colgroup>
           <thead>
             <tr>
-              <th scope="col">sha</th>
-              <th scope="col">commit</th>
+              <th scope="col">version</th>
+              <th scope="col">description</th>
               <th scope="col">when</th>
               <th scope="col"><span class="visually-hidden">action</span></th>
             </tr>

@@ -9,7 +9,7 @@
     <div id="projects-status"{{if .BuildingProject}} hx-get="/dashboard?page={{.Page}}" hx-trigger="every 1.5s" hx-select="#projects-status" hx-target="#projects-status" hx-swap="outerHTML"{{end}}>
     <p class="page-lead" style="margin-top:16px;">
       {{if not .Projects}}
-        Nothing deployed yet. Pilo is listening{{if .Port}} on :{{.Port}}{{end}} and waiting for its first repo.
+        Nothing deployed yet. Pilo is listening{{if .Port}} on :{{.Port}}{{end}} and waiting for its first site.
       {{else if eq .ProjectCount 1}}
         One site served from this machine.{{if .BuildingProject}} It is building right now.{{end}}
       {{else}}
@@ -21,13 +21,13 @@
     <!-- Empty state -->
     <div class="section-gap">
       <h2 class="section-heading">get started</h2>
-      <p class="section-prose" style="margin-top:8px;">Deploy a repository to get your first site online. Public repositories need no access token.</p>
-      <p style="margin-top:24px;"><a href="/projects/new" class="btn-primary">deploy a repository</a></p>
+      <p class="section-prose" style="margin-top:8px;">Upload an HTML file or ZIP, or deploy a Git repository to get your first site online.</p>
+      <p style="margin-top:24px;"><a href="/projects/new" class="btn-primary">deploy a site</a></p>
 
       <ol class="steps">
         <li>
           <div>
-            <p>Enter a GitHub, GitLab, or Codeberg repository and choose the branch to deploy.</p>
+            <p>Upload your built static site, or enter a GitHub, GitLab, or Codeberg repository and choose its branch.</p>
           </div>
         </li>
         <li>
@@ -52,8 +52,8 @@
           <thead>
             <tr>
               <th scope="col">project</th>
-              <th scope="col">repo @ branch</th>
-              <th scope="col">sha</th>
+              <th scope="col">source</th>
+              <th scope="col">version</th>
               <th scope="col">deployed</th>
             </tr>
           </thead>

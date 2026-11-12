@@ -88,6 +88,7 @@ var pageFiles = map[string]string{
 	"not_found":       "templates/not_found.html",
 	"index":           "templates/index.html",
 	"new":             "templates/new.html",
+	"upload":          "templates/upload.html",
 	"edit":            "templates/edit.html",
 	"project":         "templates/project.html",
 	"settings":        "templates/settings.html",

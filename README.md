@@ -1,7 +1,7 @@
 # 🛰️ Pilo
 
 <p align="center">
-  <strong>A lightweight, self-hosted PaaS for deploying static web applications straight from GitHub.</strong>
+  <strong>A lightweight, self-hosted PaaS for deploying static web applications from Git or file uploads.</strong>
 </p>
 
 <p align="center">
@@ -75,6 +75,38 @@ Use `owner/repo` for GitHub, or an HTTPS repository URL for GitHub, GitLab.com, 
 Pilo serves committed files directly without running build commands. Leave the publish directory blank to serve the repository root, or select a folder containing your committed build output (for example, `dist`). The project page warns if the active publish directory has no `index.html`; deployment still succeeds for projects that intentionally serve individual files. After your first successful GitHub deployment, follow the webhook setup instructions on the project page to enable automatic redeploys.
 
 ---
+
+## Upload HTML files and ZIP projects
+
+From **New project**, choose **upload HTML or ZIP**, then drop a file onto the
+upload area or use the file picker. Choose a project slug and deploy. No Git
+repository, remote host, or access token is required.
+
+A single `.html` or `.htm` file is published as `index.html`. For a site with local
+CSS, JavaScript, images, or other assets, upload a ZIP of the built static site.
+Pilo does not install dependencies or run builds. ZIPs may have a single enclosing
+folder, which Pilo detects automatically. Otherwise set the publish directory
+explicitly, for example `dist` or `my-site/dist`. The chosen directory must contain
+a nonempty `index.html`; validation errors suggest entry-page locations when found.
+
+Use **upload new version** on the project page to replace the complete site at its
+existing URL. Files omitted from the new upload are removed from the new version.
+Every accepted upload becomes a fresh immutable snapshot with a SHA-256 content
+identifier. Validation finishes before the same atomic release switch used for
+Git deployments. Failed uploads leave the live snapshot and history untouched.
+Rollback uses the existing five-snapshot retention policy and requires no Git
+repository. Upload projects remain until deleted; they do not automatically expire.
+
+Uploads are authenticated and ownership-scoped, with cross-origin request
+protection. Limits are 50 MiB per upload and per extracted file, 500 MiB total
+extracted data, 10,000 ZIP entries (including directories), two concurrent uploads
+per server, and a two-minute upload/validation deadline. ZIP directory records are
+bounded before parsing; actual extracted sizes and file checksums are verified.
+Unsafe paths, symlinks, special files, duplicate or conflicting paths, repository
+metadata, encrypted entries, unsupported compression, multi-volume ZIPs, and ZIP64
+archives are rejected. Nested archives are never recursively extracted. Failed
+staging and multipart temporary files are cleaned up. The upload form shows
+transfer progress, validation/publication status, and actionable errors.
 
 ## 🏷️ Versioning & Automated Releases
 

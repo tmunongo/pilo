@@ -33,6 +33,7 @@ const (
 
 // Handlers holds everything the admin UI needs to do its job.
 type Handlers struct {
+	uploadSlots     chan struct{}
 	Store           *store.Store
 	Deployer        *deploy.Deployer
 	Router          *Router
@@ -55,14 +56,15 @@ func NewHandlers(s *store.Store, d *deploy.Deployer, r *Router, baseURL string) 
 		r.SetNamespaceResolver(s.UserIDForNamespace)
 	}
 	return &Handlers{
-		Store:     s,
-		Deployer:  d,
-		Router:    r,
-		Mailer:    NewMailerFromEnv(),
-		Pages:     web.Templates(),
-		Partials:  web.PartialsTemplate(),
-		BaseURL:   baseURL,
-		SitesPath: sitesPath,
+		uploadSlots: make(chan struct{}, 2),
+		Store:       s,
+		Deployer:    d,
+		Router:      r,
+		Mailer:      NewMailerFromEnv(),
+		Pages:       web.Templates(),
+		Partials:    web.PartialsTemplate(),
+		BaseURL:     baseURL,
+		SitesPath:   sitesPath,
 	}
 }
 
@@ -168,6 +170,10 @@ func (h *Handlers) Mux() http.Handler {
 	mux.HandleFunc("GET /", h.NotFound)
 	mux.Handle("GET /dashboard", h.requireAuth(http.HandlerFunc(h.Index)))
 	mux.Handle("GET /projects/new", h.requireAuth(http.HandlerFunc(h.NewForm)))
+	mux.Handle("GET /uploads/new", h.requireAuth(http.HandlerFunc(h.UploadForm)))
+	mux.Handle("POST /uploads", h.requireAuth(http.NewCrossOriginProtection().Handler(http.HandlerFunc(h.UploadProject))))
+	mux.Handle("GET /projects/{slug}/upload", h.requireAuth(http.HandlerFunc(h.UploadForm)))
+	mux.Handle("POST /projects/{slug}/upload", h.requireAuth(http.NewCrossOriginProtection().Handler(http.HandlerFunc(h.UploadProject))))
 	mux.Handle("POST /projects", h.requireAuth(http.HandlerFunc(h.Create)))
 	mux.Handle("GET /projects/{slug}", h.requireAuth(http.HandlerFunc(h.Detail)))
 	mux.Handle("GET /projects/{slug}/edit", h.requireAuth(http.HandlerFunc(h.EditForm)))
@@ -614,6 +620,10 @@ func (h *Handlers) deployAndRegister(p *store.Project) {
 	if p == nil {
 		return
 	}
+	if p.IsUpload() {
+		return
+	}
+
 	token := h.Store.ProjectToken(p)
 	log.Printf("deploy: cloning slug=%s repo=%s/%s branch=%s", p.Slug, p.RepoOwner, p.RepoName, p.Branch)
 	commit, err := h.Deployer.CloneWithSubdir(p.CheckoutKey(), p.RepoURL(), p.Branch, token, p.Subdir)
@@ -669,7 +679,7 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		webhookLogs = nil
 	}
 	hasSecret := h.Store.EffectiveWebhookSecret(u.ID) != ""
-	isGitHub := p.RepoHost == "" || p.RepoHost == "github.com"
+	isGitHub := !p.IsUpload() && (p.RepoHost == "" || p.RepoHost == "github.com")
 	webhookStatus := "Awaiting first delivery."
 	if len(webhookLogs) > 0 {
 		switch webhookLogs[0].Status {
@@ -704,6 +714,10 @@ func (h *Handlers) Redeploy(w http.ResponseWriter, r *http.Request) {
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
 		h.NotFound(w, r)
+		return
+	}
+	if p.IsUpload() {
+		http.Redirect(w, r, "/projects/"+p.Slug+"/upload", http.StatusSeeOther)
 		return
 	}
 
@@ -754,6 +768,11 @@ func (h *Handlers) Rollback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "rollback failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if p.IsUpload() {
+		if _, subdir, err := h.Deployer.ActiveRelease(p.CheckoutKey()); err == nil {
+			p.Subdir = subdir
+		}
+	}
 	p.Status = store.StatusLive
 	p.LastCommit = commit
 	p.LastError = ""
@@ -788,6 +807,10 @@ func (h *Handlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		h.NotFound(w, r)
 		return
 	}
+	if p.IsUpload() {
+		http.Redirect(w, r, "/projects/"+p.Slug+"/upload", http.StatusSeeOther)
+		return
+	}
 	render(w, h.Pages["edit"], h.commonData(r, "", map[string]any{
 		"Project": p,
 		"Form": map[string]string{
@@ -804,6 +827,10 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	p := h.Store.GetForUser(slug, u.ID)
 	if p == nil {
 		h.NotFound(w, r)
+		return
+	}
+	if p.IsUpload() {
+		http.Redirect(w, r, "/projects/"+p.Slug+"/upload", http.StatusSeeOther)
 		return
 	}
 
@@ -999,7 +1026,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 	if event == "ping" {
 		logged := 0
 		for _, p := range h.Store.All() {
-			if (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+			if !p.IsUpload() && (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
 				sec := h.Store.EffectiveWebhookSecret(p.UserID)
 				if sec != "" && !verifySignature(sec, body, sig) {
 					_ = h.Store.CreateWebhookLog(&store.WebhookLog{
@@ -1039,7 +1066,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 
 	redeployedCount := 0
 	for _, p := range h.Store.All() {
-		if (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
+		if !p.IsUpload() && (p.RepoHost == "" || p.RepoHost == "github.com") && strings.EqualFold(p.RepoOwner, owner) && strings.EqualFold(p.RepoName, repo) {
 			// Validate per-project signature before any branch checks, so an
 			// invalid signature never produces an "ignored" log entry.
 			sec := h.Store.EffectiveWebhookSecret(p.UserID)
@@ -1081,7 +1108,7 @@ func (h *Handlers) WebhookGitHub(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				p = current
-				if (p.RepoHost != "" && p.RepoHost != "github.com") || p.Branch != branch || !strings.EqualFold(p.RepoOwner, owner) || !strings.EqualFold(p.RepoName, repo) {
+				if p.IsUpload() || (p.RepoHost != "" && p.RepoHost != "github.com") || p.Branch != branch || !strings.EqualFold(p.RepoOwner, owner) || !strings.EqualFold(p.RepoName, repo) {
 					unlock()
 					continue
 				}

@@ -61,8 +61,9 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Project is a GitHub repository deployed under its owner namespace.
+// Project is a static site deployed under its owner namespace.
 type Project struct {
+	SourceType  string    `json:"source_type"`
 	Namespace   string    `json:"namespace"`
 	ID          string    `json:"id"`
 	Slug        string    `json:"slug"`    // URL path segment, e.g. "my-app"
@@ -81,7 +82,12 @@ type Project struct {
 }
 
 // RepoURL returns the https clone URL for this project's GitHub repo.
+func (p *Project) IsUpload() bool { return p.SourceType == "upload" }
+
 func (p *Project) RepoURL() string {
+	if p.IsUpload() {
+		return ""
+	}
 	host := p.RepoHost
 	if host == "" {
 		host = "github.com"
@@ -691,7 +697,11 @@ func (s *Store) Put(p *Project) error {
 		p.ID = uuid.NewString()
 	}
 
+	if p.SourceType == "" {
+		p.SourceType = "git"
+	}
 	return s.queries.UpsertProject(ctx, db.UpsertProjectParams{
+		SourceType:  p.SourceType,
 		ID:          p.ID,
 		Slug:        p.Slug,
 		UserID:      p.UserID,
@@ -726,6 +736,7 @@ func (s *Store) DeleteForUser(slug, userID string) error {
 
 func (s *Store) toProjectModel(r db.Project) *Project {
 	return &Project{
+		SourceType:  r.SourceType,
 		Namespace:   s.Namespace(r.UserID),
 		ID:          r.ID,
 		Slug:        r.Slug,
